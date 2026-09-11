@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "A food order placed by a customer",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID of the user who placed the order" },
+        "dishId": { "type": "string", "description": "ID of the ordered dish" },
+        "dishName": { "type": "string", "description": "Name of the ordered dish" },
+        "quantity": { "type": "number", "description": "Quantity ordered" },
+        "totalPrice": { "type": "number", "description": "Total price in Rupees" },
+        "status": { 
+          "type": "string", 
+          "enum": ["ordered", "preparing", "en_route", "delivered"],
+          "description": "Current status of the order" 
+        },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerPhone": { "type": "string", "pattern": "^[0-9]{10}$" },
+        "customerAddress": { "type": "string", "maxLength": 500 },
+        "parcelId": { "type": "string", "description": "Tracking ID for the parcel" },
+        "trackingNumber": { "type": "string", "description": "Tracking number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dishId", "dishName", "quantity", "totalPrice", "status", "customerName", "customerPhone", "customerAddress", "createdAt", "updatedAt"]
+    },
+    "Parcel": {
+      "title": "Parcel",
+      "description": "A food package dispatch record synced to admin",
+      "type": "object",
+      "properties": {
+        "parcelId": { "type": "string", "description": "Unique parcel identifier" },
+        "orderId": { "type": "string", "description": "Associated order ID" },
+        "userId": { "type": "string", "description": "Customer user ID" },
+        "recipientName": { "type": "string" },
+        "recipientPhone": { "type": "string" },
+        "destination": { "type": "string" },
+        "parcelType": { "type": "string" },
+        "parcelWeight": { "type": "string" },
+        "parcelStatus": { "type": "string" },
+        "totalValue": { "type": "number" },
+        "syncedToFirebase": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["parcelId", "userId", "recipientName", "recipientPhone", "destination", "totalValue", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of all orders"
+    },
+    "/parcels/{parcelId}": {
+      "schema": "Parcel",
+      "description": "Collection of all synced parcels dispatched for admin"
+    }
+  }
+}

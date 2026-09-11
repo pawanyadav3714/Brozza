@@ -1,0 +1,8 @@
+{
+  "name": "Remix The Barozza Cafe",
+  "description": "A premium dark-themed cafe experience with glassmorphism UI and a full-screen dish slideshow.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
