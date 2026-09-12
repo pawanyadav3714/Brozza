@@ -26,19 +26,39 @@ export interface UserAddress {
 
 export type AppStep = 'menu' | 'checkout' | 'payment' | 'success' | 'admin';
 
-export type OrderStatus = 'idle' | 'ordered' | 'preparing' | 'en_route' | 'delivered';
+export type OrderStatus = 
+  | 'idle' 
+  | 'ordered' 
+  | 'preparing' 
+  | 'en_route' 
+  | 'delivered'
+  | 'Pending'
+  | 'Received'
+  | 'Processing'
+  | 'Out For_delivery'
+  | 'Delivered'
+  | 'pending'
+  | 'received'
+  | 'processing'
+  | 'out_for_delivery';
+
+export type PipelineStage = 'Pending' | 'Received' | 'Processing' | 'Out For_delivery' | 'Delivered';
 
 export interface Order {
   id: string;
   userId: string;
   dishId: string;
   dishName: string;
+  dishImage?: string;
   quantity: number;
   totalPrice: number;
   status: OrderStatus;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  paymentMethod?: 'cod' | 'qr' | 'razorpay';
+  paymentId?: string;
+  paymentStatus?: 'paid' | 'pending' | 'failed';
   createdAt: any;
   updatedAt: any;
   // Enhanced Parcel & Dispatch synchronization

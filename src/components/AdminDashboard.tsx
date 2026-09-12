@@ -42,7 +42,7 @@ interface AdminDashboardProps {
   onResetInventory?: () => void;
 }
 
-const STUDIO_APP_URL = "https://aistudio.google.com/apps/14528da1-7baf-4d9c-a2c5-f701aa8cea80?project=event-1b6b0&showAssistant=true&showPreview=true";
+const STUDIO_APP_URL = "https://brozza-admin.vercel.app/";
 
 export default function AdminDashboard({
   onBack,
@@ -162,7 +162,7 @@ export default function AdminDashboard({
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-red-600 hover:bg-red-500 text-white border border-red-400/40 text-xs font-black tracking-wide transition-all shadow-lg shadow-red-950/50 cursor-pointer group"
-              title="Launch External Dedicated Admin Dashboard (14528da1-7baf-4d9c-a2c5-f701aa8cea80)"
+              title="Launch Brozza Admin Portal (brozza-admin.vercel.app)"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-green-300" />
               <span>External Admin App</span>

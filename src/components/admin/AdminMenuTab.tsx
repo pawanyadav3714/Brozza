@@ -56,6 +56,8 @@ export default function AdminMenuTab({
 }: AdminMenuTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+
+  const allCategories = ['All', ...Array.from(new Set([...CATEGORIES, ...dishes.map((d) => d.category).filter(Boolean)]))];
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -176,7 +178,7 @@ export default function AdminMenuTab({
 
       {/* Category Pills */}
       <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">
-        {['All', ...CATEGORIES].map((cat) => (
+        {allCategories.map((cat) => (
           <button
             key={cat}
             type="button"
@@ -400,7 +402,7 @@ export default function AdminMenuTab({
                       onChange={(e) => setFormCategory(e.target.value)}
                       className="w-full bg-neutral-800 border border-white/15 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-red-500/60 font-medium"
                     >
-                      {CATEGORIES.map((cat) => (
+                      {allCategories.filter((c) => c !== 'All').map((cat) => (
                         <option key={cat} value={cat} className="bg-neutral-900 text-white">
                           {cat}
                         </option>

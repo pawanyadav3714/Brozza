@@ -45,9 +45,30 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["parcelId", "userId", "recipientName", "recipientPhone", "destination", "totalValue", "createdAt", "updatedAt"]
+    },
+    "Dish": {
+      "title": "Dish",
+      "description": "A menu food dish item synced between Admin and Customer app",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Dish identifier" },
+        "name": { "type": "string", "description": "Name of the dish" },
+        "price": { "type": "number", "description": "Price in rupees" },
+        "category": { "type": "string", "description": "Category name (e.g. Starters, Chinese, etc.)" },
+        "description": { "type": "string", "description": "Description of the dish" },
+        "image": { "type": "string", "description": "Image URL or asset path" },
+        "available": { "type": "boolean", "description": "Whether the dish is in stock and available" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "price", "category", "description", "image"]
     }
   },
   "firestore": {
+    "/dishes/{dishId}": {
+      "schema": "Dish",
+      "description": "Collection of all menu dishes synchronized live with Admin Dashboard"
+    },
     "/orders/{orderId}": {
       "schema": "Order",
       "description": "Collection of all orders"

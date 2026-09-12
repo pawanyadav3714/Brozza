@@ -23,6 +23,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { Order, OrderStatus } from '../../types';
+import { PIPELINE_STAGES, normalizePipelineStage } from '../ParcelPipelineTracker';
 
 interface AdminOrdersTabProps {
   orders: Order[];
@@ -32,14 +33,19 @@ interface AdminOrdersTabProps {
   onDeleteOrder?: (orderId: string) => Promise<void>;
 }
 
-const STUDIO_APP_URL = "https://aistudio.google.com/apps/14528da1-7baf-4d9c-a2c5-f701aa8cea80?project=event-1b6b0&showAssistant=true&showPreview=true";
+const STUDIO_APP_URL = "https://brozza-admin.vercel.app/";
 
-const statusMap: Record<OrderStatus, { label: string; color: string; icon: any }> = {
+const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   idle: { label: 'Idle', color: 'bg-gray-500', icon: Clock },
   ordered: { label: 'Ordered', color: 'bg-blue-600', icon: Package },
   preparing: { label: 'Preparing', color: 'bg-amber-600', icon: RefreshCw },
   en_route: { label: 'En Route', color: 'bg-indigo-600', icon: Truck },
   delivered: { label: 'Delivered', color: 'bg-emerald-600', icon: CheckCircle2 },
+  Pending: { label: 'Pending', color: 'bg-red-600', icon: Clock },
+  Received: { label: 'Received', color: 'bg-emerald-600', icon: Package },
+  Processing: { label: 'Processing', color: 'bg-amber-600', icon: RefreshCw },
+  'Out For_delivery': { label: 'Out For Delivery', color: 'bg-blue-600', icon: Truck },
+  Delivered: { label: 'Delivered', color: 'bg-emerald-600', icon: CheckCircle2 },
 };
 
 export default function AdminOrdersTab({
@@ -98,7 +104,7 @@ export default function AdminOrdersTab({
               </span>
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
-              All parcel bookings and order updates are pushed to Firebase Firestore collections (<code className="text-red-300 font-mono">orders</code> & <code className="text-red-300 font-mono">parcels</code>) for your external Admin Dashboard applet.
+              All parcel bookings and order updates are pushed to Firebase Firestore collections (<code className="text-red-300 font-mono">orders</code> & <code className="text-red-300 font-mono">parcels</code>) for your admin portal at <span className="text-white font-mono">brozza-admin.vercel.app</span>.
             </p>
           </div>
         </div>
@@ -109,7 +115,7 @@ export default function AdminOrdersTab({
           rel="noopener noreferrer"
           className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-red-950/50 shrink-0 self-stretch sm:self-auto justify-center group cursor-pointer"
         >
-          <span>Open External Admin</span>
+          <span>Open Brozza Admin</span>
           <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
         </a>
       </div>
@@ -282,30 +288,54 @@ export default function AdminOrdersTab({
                         <MapPin className="w-3.5 h-3.5 text-gray-500 shrink-0 mt-0.5" />
                         <span className="line-clamp-2">{order.customerAddress || 'No address specified'}</span>
                       </div>
+
+                      {/* Payment Method Badge */}
+                      <div className="pt-2 border-t border-white/5 flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Payment:</span>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                          order.paymentMethod === 'razorpay'
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                            : order.paymentMethod === 'cod'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        }`}>
+                          {order.paymentMethod === 'razorpay' ? 'Razorpay Online' : order.paymentMethod === 'cod' ? 'Cash On Delivery' : order.paymentMethod === 'qr' ? 'UPI QR' : 'Online'}
+                        </span>
+                        {order.paymentId && (
+                          <span className="font-mono text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/10" title="Razorpay Payment ID">
+                            ID: {order.paymentId}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Right: Pipeline Advance Actions */}
                     <div className="flex flex-col justify-between items-start lg:items-end border-t lg:border-t-0 lg:border-l border-white/10 pt-4 lg:pt-0 lg:pl-6 min-w-[240px]">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">
-                        Advance Pipeline
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2.5">
+                        Admin Pipeline Controls
                       </span>
 
-                      <div className="grid grid-cols-2 gap-2 w-full">
-                        {(['ordered', 'preparing', 'en_route', 'delivered'] as OrderStatus[]).map((status) => {
-                          const isCurrent = order.status === status;
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 w-full">
+                        {PIPELINE_STAGES.map((stage) => {
+                          const isCurrent = normalizePipelineStage(order.status) === stage;
                           return (
                             <button
-                              key={status}
+                              key={stage}
                               type="button"
                               disabled={isUpdating}
-                              onClick={() => handleStatusChange(order.id, status)}
-                              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer text-center ${
+                              onClick={() => handleStatusChange(order.id, stage as OrderStatus)}
+                              className={`px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer text-center truncate ${
                                 isCurrent
-                                  ? 'bg-red-600 text-white shadow-lg shadow-red-900/40 ring-1 ring-red-400/50'
+                                  ? (stage === 'Pending'
+                                      ? 'bg-red-600 text-white shadow-md shadow-red-900/40 ring-1 ring-red-400 animate-pulse'
+                                      : stage === 'Delivered'
+                                        ? 'bg-emerald-600 text-white shadow-md ring-1 ring-emerald-400'
+                                        : 'bg-emerald-600 text-white shadow-md shadow-emerald-900/40 ring-1 ring-emerald-400 animate-pulse')
                                   : 'bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white border border-white/5'
                               }`}
+                              title={`Set status to ${stage}`}
                             >
-                              {status.replace('_', ' ')}
+                              {stage}
                             </button>
                           );
                         })}

@@ -41,7 +41,7 @@ export default function AdminOverviewTab({
   const lowStockItems = inventory.filter(item => item.quantity <= item.minThreshold);
   const criticalItems = inventory.filter(item => item.quantity <= 0);
 
-  const STUDIO_APP_URL = "https://aistudio.google.com/apps/14528da1-7baf-4d9c-a2c5-f701aa8cea80?project=event-1b6b0&showAssistant=true&showPreview=true";
+  const STUDIO_APP_URL = "https://brozza-admin.vercel.app/";
 
   return (
     <div className="space-y-8">
@@ -153,27 +153,27 @@ export default function AdminOverviewTab({
         </motion.div>
       </div>
 
-      {/* External AI Studio Admin Applet Link Callout */}
+      {/* External Admin Portal Link Callout */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-red-950/40 via-neutral-900/60 to-black/80 border border-red-500/30 backdrop-blur-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-2xl">
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-red-400 text-xs font-black uppercase tracking-widest">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span>Dedicated Studio Operations Applet</span>
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span>Dedicated Admin Portal (Vercel)</span>
           </div>
           <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-            Remix The Barozza Cafe - Admin Console
+            Brozza Admin Portal — brozza-admin.vercel.app
           </h3>
           <p className="text-gray-300 text-sm max-w-xl font-medium leading-relaxed">
-            Manage live orders, menu catalog modifications, and raw ingredient stock directly within this unified dashboard or launch the full external studio interface.
+            All customer orders, dispatch parcels, and kitchen updates sync to Firebase Firestore so your dedicated admin portal receives live data continuously.
           </p>
         </div>
         <a
           href={STUDIO_APP_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-6 py-3.5 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-2 shadow-lg shadow-red-900/40 transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
+          className="px-6 py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-2 shadow-lg shadow-red-900/40 transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap border border-red-400/40"
         >
-          <span>Open AI Studio Workspace</span>
+          <span>Open Brozza Admin Site</span>
           <ExternalLink className="w-4 h-4" />
         </a>
       </div>

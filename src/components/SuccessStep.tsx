@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, ShoppingBag, ArrowRight, Loader2, Truck, Copy, PackageCheck, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ShoppingBag, ArrowRight, Loader2, Truck, Copy, PackageCheck, ShieldCheck, CreditCard } from 'lucide-react';
 import { OrderStatus } from '../types';
 
 interface SuccessStepProps {
@@ -13,13 +13,15 @@ interface SuccessStepProps {
   orderStatus: OrderStatus;
   parcelId?: string | null;
   customerAddress?: string | null;
+  paymentInfo?: { method?: string; paymentId?: string } | null;
 }
 
 export default function SuccessStep({ 
   onReset, 
   orderStatus, 
   parcelId,
-  customerAddress 
+  customerAddress,
+  paymentInfo 
 }: SuccessStepProps) {
   const [copied, setCopied] = useState(false);
   const isOrdered = ['ordered', 'preparing', 'en_route'].includes(orderStatus);
@@ -104,6 +106,23 @@ export default function SuccessStep({
           <div className="text-xs text-gray-300">
             <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px] block">Destination</span>
             <span className="font-medium truncate block">{customerAddress}</span>
+          </div>
+        )}
+
+        {paymentInfo && (
+          <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-3.5 h-3.5 text-red-400" />
+              <span className="text-gray-400">Payment:</span>
+              <span className="font-bold text-white uppercase tracking-wider">
+                {paymentInfo.method === 'razorpay' ? 'Razorpay (Online Paid)' : (paymentInfo.method === 'qr' ? 'UPI QR' : 'Cash on Delivery')}
+              </span>
+            </div>
+            {paymentInfo.paymentId && (
+              <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                ID: {paymentInfo.paymentId}
+              </span>
+            )}
           </div>
         )}
       </motion.div>

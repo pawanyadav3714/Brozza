@@ -17,10 +17,15 @@ import {
   Mail, 
   Sparkles,
   LayoutDashboard,
-  Utensils
+  Utensils,
+  ExternalLink,
+  ShieldCheck
 } from 'lucide-react';
-import { OrderStatus } from '../types';
+import { OrderStatus, Order } from '../types';
 import { useFirebase } from './FirebaseProvider';
+import { normalizePipelineStage } from './ParcelPipelineTracker';
+
+const ADMIN_SITE_URL = "https://brozza-admin.vercel.app/";
 
 interface HeaderProps {
   cartCount: number;
@@ -29,6 +34,7 @@ interface HeaderProps {
   onBackToMenu?: () => void;
   step: string;
   orderStatus: OrderStatus;
+  orders?: Order[];
 }
 
 const statusConfig = {
@@ -85,11 +91,29 @@ function getFormattedName(displayName?: string | null, email?: string | null): s
   return 'Customer';
 }
 
-export default function Header({ cartCount, onOpenCart, onOpenAdmin, onBackToMenu, step, orderStatus }: HeaderProps) {
+export default function Header({ 
+  cartCount, 
+  onOpenCart, 
+  onOpenAdmin, 
+  onBackToMenu, 
+  step, 
+  orderStatus,
+  orders = [] 
+}: HeaderProps) {
   const { user, signInWithGoogle, signOutUser, isSigningIn } = useFirebase();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const currentStatus = statusConfig[orderStatus];
+
+  // Derive dynamic pipeline stage for the header bag button
+  const latestOrder = orders && orders.length > 0 ? orders[0] : null;
+  const activePipelineStage = latestOrder 
+    ? normalizePipelineStage(latestOrder.status) 
+    : (orderStatus !== 'idle' ? normalizePipelineStage(orderStatus) : null);
+
+  const isPending = activePipelineStage === 'Pending';
+  const isAcceptedOrProgress = activePipelineStage === 'Received' || activePipelineStage === 'Processing' || activePipelineStage === 'Out For_delivery';
+  const isDelivered = activePipelineStage === 'Delivered';
+  const totalBadgeCount = cartCount > 0 ? cartCount : (orders.length > 0 ? orders.length : 0);
 
   const initials = getInitials(user?.displayName, user?.email);
   const formattedName = getFormattedName(user?.displayName, user?.email);
@@ -146,62 +170,14 @@ export default function Header({ cartCount, onOpenCart, onOpenAdmin, onBackToMen
         </div>
 
         {/* Central Navigation Bar Links */}
-        <nav className="hidden md:flex items-center gap-3 lg:gap-4 text-sm font-bold">
-          <button
-            type="button"
-            onClick={onBackToMenu}
-            className={`flex items-center gap-2 px-4 py-2 rounded-2xl transition-all cursor-pointer text-xs font-black tracking-wide ${
-              step !== 'admin'
-                ? 'bg-white/10 text-white border border-white/20 shadow-md'
-                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
-            }`}
-          >
-            <Utensils className={`w-3.5 h-3.5 ${step !== 'admin' ? 'text-red-500' : 'text-gray-400'}`} />
-            <span>Customer Menu</span>
-          </button>
-
-          {/* Admin Dashboard & Firebase Sync Link in Nav */}
-          <button
-            type="button"
-            id="nav-admin-dashboard-link"
-            onClick={onOpenAdmin}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl transition-all cursor-pointer text-xs font-black tracking-wide shadow-lg ${
-              step === 'admin'
-                ? 'bg-red-600 text-white border border-red-400/60 shadow-red-900/50 ring-2 ring-red-500/30'
-                : 'bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-white border border-red-500/30 hover:border-red-500/60 shadow-red-950/30'
-            }`}
-            title="Open Admin Dashboard & Firebase Parcel Sync Hub"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5 text-red-400" />
-            <span>Admin Portal</span>
-            <span className="flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-green-500/20 border border-green-500/40 text-green-300 uppercase tracking-widest">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              Firebase Sync
-            </span>
-          </button>
-
-          <div className="flex items-center gap-1.5 text-gray-400 text-xs font-semibold pl-2 border-l border-white/10">
+        <nav className="hidden md:flex items-center text-sm font-bold">
+          <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-300 text-xs font-medium">
             <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-            <span className="truncate max-w-[150px] lg:max-w-[220px]">GEC Palamu</span>
+            <span className="truncate max-w-[180px] lg:max-w-[240px]">GEC Palamu</span>
           </div>
         </nav>
 
         <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Mobile Admin Dashboard Link Button */}
-          <button
-            type="button"
-            onClick={step === 'admin' ? onBackToMenu : onOpenAdmin}
-            className={`md:hidden px-3 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 border shadow-md ${
-              step === 'admin'
-                ? 'bg-red-600 text-white border-red-400/50'
-                : 'bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-white border-red-500/30'
-            }`}
-            title="Admin Dashboard"
-            aria-label="Admin Dashboard"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5" />
-            <span>{step === 'admin' ? 'Menu' : 'Admin'}</span>
-          </button>
           {/* Top-Right Profile Icon & Glassmorphism Popover */}
           <div className="relative" ref={profileRef}>
             {user ? (
@@ -254,11 +230,27 @@ export default function Header({ cartCount, onOpenCart, onOpenAdmin, onBackToMen
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-300 mb-4">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-300 mb-3">
                       <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
                       <span className="text-emerald-400">Signed in</span>
                       <span className="text-gray-500">•</span>
                       <span className="truncate text-gray-400">{user.email}</span>
+                    </div>
+
+                    {/* Discreet Admin Portal Link in Profile Popover */}
+                    <div className="mb-3">
+                      <a
+                        href={ADMIN_SITE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 hover:text-white font-bold text-xs transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
+                          <span>Brozza Admin Portal</span>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" />
+                      </a>
                     </div>
 
                     <div className="border-t border-white/10 pt-3">
@@ -280,47 +272,35 @@ export default function Header({ cartCount, onOpenCart, onOpenAdmin, onBackToMen
             </AnimatePresence>
           </div>
 
-          {/* Cart / Order Status Button */}
+          {/* Cart / Order Status Bag Button */}
           <button 
+            type="button"
             onClick={onOpenCart}
-            className={`relative p-3 rounded-2xl transition-all border ${orderStatus !== 'idle' ? 'bg-white/5 border-white/20 px-6 flex items-center gap-3' : 'hover:bg-white/10 border-transparent hover:border-white/10'}`}
-            disabled={step !== 'menu' && orderStatus === 'idle'}
+            className="relative p-2.5 sm:p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-md"
+            title="View Order Fulfillment Pipeline & Bag"
+            aria-label="View Orders and Bag"
           >
-            <AnimatePresence mode="wait">
-              {currentStatus ? (
-                <motion.div 
-                  key="status"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="flex items-center gap-3"
-                >
-                  <div className={`w-2 h-2 rounded-full ${currentStatus.color} animate-pulse`} />
-                  <span className="text-xs font-black uppercase tracking-widest text-white">
-                    {currentStatus.label}
-                  </span>
-                  <currentStatus.icon className={`w-5 h-5 text-white ${currentStatus.spin ? 'animate-spin' : ''}`} />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="cart"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                >
-                  <ShoppingBag className="w-7 h-7 text-white" />
-                  {cartCount > 0 && (
-                    <motion.span 
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute top-1 right-1 w-6 h-6 bg-red-600 text-white text-xs font-black flex items-center justify-center rounded-lg shadow-lg"
-                    >
-                      {cartCount}
-                    </motion.span>
-                  )}
-                </motion.div>
+            <div className="relative flex items-center justify-center">
+              <ShoppingBag className="w-6 h-6 sm:w-6.5 sm:h-6.5 text-white stroke-[1.8]" />
+              
+              {/* Dynamic Status Dot on Bag Icon */}
+              {isPending && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,1)] border border-neutral-900" />
               )}
-            </AnimatePresence>
+              {isAcceptedOrProgress && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,1)] border border-neutral-900" />
+              )}
+              {isDelivered && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,1)] border border-neutral-900" />
+              )}
+
+              {/* Badge count when no active stage or multiple items */}
+              {!activePipelineStage && totalBadgeCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white text-[10px] font-black flex items-center justify-center rounded-full shadow-lg border border-neutral-900">
+                  {totalBadgeCount}
+                </span>
+              )}
+            </div>
           </button>
         </div>
       </div>

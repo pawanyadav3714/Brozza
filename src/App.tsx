@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, setDoc, serverTimestamp, doc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, setDoc, serverTimestamp, doc, onSnapshot, query, orderBy, limit, updateDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
+import { subscribeToDishes, saveDishToFirestore, deleteDishFromFirestore } from './lib/dishesSync';
 import { useFirebase } from './components/FirebaseProvider';
 import Header from './components/Header';
 import DishCarousel from './components/DishCarousel';
@@ -18,7 +19,45 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminSyncGatewayModal from './components/AdminSyncGatewayModal';
 import DishSlideshow from './components/DishSlideshow';
 import { DISHES, INITIAL_INVENTORY } from './data';
-import { Dish, AppStep, UserAddress, OrderStatus, InventoryItem } from './types';
+import { Dish, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage } from './types';
+import { normalizePipelineStage } from './components/ParcelPipelineTracker';
+
+const DEFAULT_DEMO_ORDERS: Order[] = [
+  {
+    id: 'brz-ord-101',
+    userId: 'demo-user',
+    dishId: 'd1',
+    dishName: 'Artisanal Cold Brew Coffee',
+    dishImage: '/images/coldcoffe.png',
+    quantity: 1,
+    totalPrice: 180,
+    status: 'Pending',
+    customerName: 'Priyanshu Verma',
+    customerPhone: '+91 98765 43210',
+    customerAddress: 'GEC Palamu Campus, Block A, Room 304',
+    parcelId: 'PRCL-BRZ-LIVE-101',
+    trackingNumber: 'BRZTRK98101',
+    createdAt: { seconds: Math.floor((Date.now() - 6 * 60 * 1000) / 1000) },
+    updatedAt: { seconds: Math.floor(Date.now() / 1000) },
+  },
+  {
+    id: 'brz-ord-102',
+    userId: 'demo-user',
+    dishId: 'd2',
+    dishName: 'Crispy French Fries & Dip',
+    dishImage: '/images/frenchh.png',
+    quantity: 2,
+    totalPrice: 240,
+    status: 'Received',
+    customerName: 'Priyanshu Verma',
+    customerPhone: '+91 98765 43210',
+    customerAddress: 'GEC Palamu Campus, Block A, Room 304',
+    parcelId: 'PRCL-BRZ-LIVE-102',
+    trackingNumber: 'BRZTRK98102',
+    createdAt: { seconds: Math.floor((Date.now() - 28 * 60 * 1000) / 1000) },
+    updatedAt: { seconds: Math.floor(Date.now() / 1000) },
+  }
+];
 
 export default function App() {
   const { user } = useFirebase();
@@ -30,8 +69,23 @@ export default function App() {
   const [orderStatus, setOrderStatus] = useState<OrderStatus>('idle');
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [currentParcelId, setCurrentParcelId] = useState<string | null>(null);
+  const [lastPaymentInfo, setLastPaymentInfo] = useState<{ method?: string; paymentId?: string } | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
+
+  // Real-time live orders list with persistence and fallback
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const saved = localStorage.getItem('barozza_cafe_orders');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.warn('Failed to parse cached orders:', e);
+      }
+    }
+    return DEFAULT_DEMO_ORDERS;
+  });
 
   // Menu Catalog State with persistence
   const [dishes, setDishes] = useState<Dish[]>(() => {
@@ -61,10 +115,22 @@ export default function App() {
     return INITIAL_INVENTORY;
   });
 
-  // Persist dishes
+  // Real-time synchronization for Menu Dishes from Firestore (barozza_menu_catalog & dishes collection)
+  // This ensures any new dishes added by the admin anywhere immediately appear on the customer site
   useEffect(() => {
-    localStorage.setItem('barozza_cafe_dishes', JSON.stringify(dishes));
-  }, [dishes]);
+    const unsubscribe = subscribeToDishes((syncedDishes) => {
+      if (syncedDishes && syncedDishes.length > 0) {
+        setDishes(syncedDishes);
+        try {
+          localStorage.setItem('barozza_cafe_dishes', JSON.stringify(syncedDishes));
+        } catch (e) {
+          console.warn('Failed to cache synced dishes:', e);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Persist inventory
   useEffect(() => {
@@ -73,21 +139,29 @@ export default function App() {
 
   // Dish Handlers for Admin
   const handleUpdateDish = (updatedDish: Dish) => {
-    setDishes((prev) => prev.map((d) => (d.id === updatedDish.id ? updatedDish : d)));
+    const nextDishes = dishes.map((d) => (d.id === updatedDish.id ? updatedDish : d));
+    setDishes(nextDishes);
+    saveDishToFirestore(updatedDish, nextDishes);
   };
 
   const handleAddDish = (newDish: Dish) => {
-    setDishes((prev) => [newDish, ...prev]);
+    const nextDishes = [newDish, ...dishes];
+    setDishes(nextDishes);
+    saveDishToFirestore(newDish, nextDishes);
   };
 
   const handleDeleteDish = (dishId: string) => {
     setDishes((prev) => prev.filter((d) => d.id !== dishId));
+    deleteDishFromFirestore(dishId);
   };
 
   const handleToggleDishAvailability = (dishId: string) => {
-    setDishes((prev) =>
-      prev.map((d) => (d.id === dishId ? { ...d, available: d.available === false ? true : false } : d))
-    );
+    const target = dishes.find((d) => d.id === dishId);
+    if (!target) return;
+    const toggled = { ...target, available: target.available === false ? true : false };
+    const nextDishes = dishes.map((d) => (d.id === dishId ? toggled : d));
+    setDishes(nextDishes);
+    saveDishToFirestore(toggled, nextDishes);
   };
 
   const handleResetDishes = () => {
@@ -129,7 +203,40 @@ export default function App() {
     localStorage.removeItem('barozza_cafe_inventory');
   };
 
-  // Real-time order tracking
+  // Real-time live orders tracking across the storefront
+  useEffect(() => {
+    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(30));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs
+            .filter((docSnap) => docSnap.id !== 'barozza_menu_catalog' && !docSnap.data().isCatalog)
+            .map((docSnap) => {
+              const data = docSnap.data();
+              return {
+                id: docSnap.id,
+                ...data,
+                dishImage: data.dishImage || dishes.find((d) => d.id === data.dishId)?.image || '/images/frenchh.png',
+              } as Order;
+            });
+          setOrders(list);
+          try {
+            localStorage.setItem('barozza_cafe_orders', JSON.stringify(list));
+          } catch (e) {
+            console.warn('Failed to cache orders:', e);
+          }
+        }
+      },
+      (error) => {
+        console.warn('Live orders tracking error:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [dishes]);
+
+  // Real-time single active order tracking
   useEffect(() => {
     if (!currentOrderId) return;
 
@@ -149,6 +256,34 @@ export default function App() {
     return () => unsubscribe();
   }, [currentOrderId]);
 
+  const handleUpdateOrderStatus = async (orderId: string, newStage: PipelineStage) => {
+    // 1. Immediate optimistic UI update
+    setOrders((prev) => {
+      const updated = prev.map((o) => (o.id === orderId ? { ...o, status: newStage } : o));
+      try {
+        localStorage.setItem('barozza_cafe_orders', JSON.stringify(updated));
+      } catch (e) {
+        // ignore
+      }
+      return updated;
+    });
+
+    if (currentOrderId === orderId) {
+      setOrderStatus(newStage);
+    }
+
+    // 2. Sync to Firebase Firestore
+    try {
+      const orderRef = doc(db, 'orders', orderId);
+      await updateDoc(orderRef, {
+        status: newStage,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Firestore stage update (demo or network):', err);
+    }
+  };
+
   const handleDishSelect = (dish: Dish) => {
     setSelectedDish(dish);
     setQuantity(1);
@@ -165,7 +300,7 @@ export default function App() {
     setStep('payment');
   };
 
-  const handlePaymentConfirm = async () => {
+  const handlePaymentConfirm = async (paymentInfo?: { method: 'cod' | 'qr' | 'razorpay'; paymentId?: string }) => {
     if (!selectedDish || !userAddress || !user) return;
 
     // Generate unique parcel tracking identifiers
@@ -175,27 +310,36 @@ export default function App() {
     const trackingNumber = `BRZTRK${timeStampNum}${randomSuffix}`;
     const weightEstimate = `${(0.42 * quantity).toFixed(2)} kg`;
 
+    const chosenMethod = paymentInfo?.method || 'razorpay';
+    const paymentId = paymentInfo?.paymentId || '';
+    const paymentStatus = chosenMethod === 'cod' ? 'pending' : 'paid';
+    setLastPaymentInfo({ method: chosenMethod, paymentId });
+
     try {
       const orderData = {
         userId: user.uid,
         dishId: selectedDish.id,
         dishName: selectedDish.name,
+        dishImage: selectedDish.image,
         quantity: quantity,
         totalPrice: selectedDish.price * quantity,
-        status: 'ordered',
+        status: 'Pending',
         customerName: userAddress.name,
         customerPhone: userAddress.phone,
         customerAddress: userAddress.address,
+        paymentMethod: chosenMethod,
+        paymentId: paymentId,
+        paymentStatus: paymentStatus,
         parcelId: parcelId,
         trackingNumber: trackingNumber,
         parcelType: 'Artisanal Cafe Fresh Food Express Parcel',
         parcelWeight: weightEstimate,
         parcelStatus: 'booked',
         destinationLocation: userAddress.address,
-        deliveryNotes: 'Dispatched via The Barozza Express Courier Fleet',
+        deliveryNotes: `Dispatched via The Barozza Express Courier Fleet (${chosenMethod.toUpperCase()})`,
         syncedToFirebase: true,
         syncedAt: serverTimestamp(),
-        externalAdminUrl: 'https://aistudio.google.com/apps/14528da1-7baf-4d9c-a2c5-f701aa8cea80?project=event-1b6b0&showAssistant=true&showPreview=true',
+        externalAdminUrl: 'https://brozza-admin.vercel.app/',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -203,6 +347,16 @@ export default function App() {
       const docRef = await addDoc(collection(db, 'orders'), orderData);
       setCurrentOrderId(docRef.id);
       setCurrentParcelId(parcelId);
+
+      // Prepend to local orders state immediately
+      const newLocalOrder: Order = {
+        id: docRef.id,
+        ...orderData,
+        status: 'Pending',
+        createdAt: { seconds: Math.floor(Date.now() / 1000) },
+        updatedAt: { seconds: Math.floor(Date.now() / 1000) },
+      } as Order;
+      setOrders((prev) => [newLocalOrder, ...prev]);
 
       // Dual-sync to dedicated 'parcels' collection for admin applet
       const parcelData = {
@@ -222,7 +376,7 @@ export default function App() {
         syncedToFirebase: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        externalAdminUrl: 'https://aistudio.google.com/apps/14528da1-7baf-4d9c-a2c5-f701aa8cea80?project=event-1b6b0&showAssistant=true&showPreview=true',
+        externalAdminUrl: 'https://brozza-admin.vercel.app/',
       };
 
       try {
@@ -250,14 +404,34 @@ export default function App() {
     setOrderStatus('idle');
     setCurrentOrderId(null);
     setCurrentParcelId(null);
+    setLastPaymentInfo(null);
   };
 
   const totalPrice = selectedDish ? selectedDish.price * quantity : 0;
 
+  // Dynamic categories computed from all dishes (including any newly added dishes from admin dashboard)
+  const availableCategories = useMemo(() => {
+    const list = ['All'];
+    const seen = new Set<string>();
+    dishes.forEach((d) => {
+      const cat = d.category ? d.category.trim() : 'General';
+      const lower = cat.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        const formatted = cat.charAt(0).toUpperCase() + cat.slice(1);
+        list.push(formatted);
+      }
+    });
+    return list;
+  }, [dishes]);
+
   // Filter dishes for customer menu
-  const displayedDishes = selectedFilter === 'All' 
-    ? dishes 
-    : dishes.filter((d) => d.category?.toLowerCase() === selectedFilter.toLowerCase());
+  const displayedDishes = useMemo(() => {
+    if (selectedFilter === 'All') return dishes;
+    return dishes.filter(
+      (d) => (d.category || 'General').trim().toLowerCase() === selectedFilter.trim().toLowerCase()
+    );
+  }, [dishes, selectedFilter]);
 
   if (step === 'admin') {
     return (
@@ -271,6 +445,7 @@ export default function App() {
             onBackToMenu={() => setStep('menu')}
             step={step}
             orderStatus={orderStatus}
+            orders={orders}
           />
           <AdminDashboard 
             onBack={() => setStep('menu')}
@@ -304,6 +479,7 @@ export default function App() {
           onBackToMenu={() => setStep('menu')}
           step={step}
           orderStatus={orderStatus}
+          orders={orders}
         />
 
         <main className="pb-20">
@@ -358,15 +534,15 @@ export default function App() {
                       </p>
                     </motion.div>
                     
-                    {/* Category Filter Pills */}
+                    {/* Category Filter Pills (Dynamically populated from all active dishes) */}
                     <div className="flex flex-wrap justify-center gap-2.5">
-                      {['All', 'Starters', 'Chinese', 'Italian', 'Rolls'].map((filter) => (
+                      {availableCategories.map((filter) => (
                         <button 
                           key={filter}
                           type="button"
                           onClick={() => setSelectedFilter(filter)}
                           className={`px-5 py-2 backdrop-blur-md rounded-full text-xs font-black uppercase tracking-wider transition-all shadow-lg cursor-pointer ${
-                            selectedFilter === filter
+                            selectedFilter.toLowerCase() === filter.toLowerCase()
                               ? 'bg-red-600 border border-red-400 text-white shadow-red-900/50 scale-105'
                               : 'bg-white/10 border border-white/20 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500'
                           }`}
@@ -473,6 +649,9 @@ export default function App() {
               >
                 <PaymentStep 
                   totalPrice={totalPrice}
+                  userAddress={userAddress}
+                  dishName={selectedDish?.name}
+                  quantity={quantity}
                   onBack={() => setStep('checkout')} 
                   onConfirm={handlePaymentConfirm} 
                 />
@@ -491,6 +670,7 @@ export default function App() {
                   orderStatus={orderStatus} 
                   parcelId={currentParcelId}
                   customerAddress={userAddress?.address}
+                  paymentInfo={lastPaymentInfo}
                 />
               </motion.div>
             )}
@@ -505,6 +685,12 @@ export default function App() {
         quantity={quantity}
         onUpdateQuantity={setQuantity}
         onProceedToCheckout={handleProceedToCheckout}
+        orders={orders}
+        onUpdateOrderStatus={handleUpdateOrderStatus}
+        onSelectDishForNewOrder={() => {
+          setSelectedDish(dishes[0]);
+          setIsCartOpen(true);
+        }}
       />
 
       <AdminSyncGatewayModal

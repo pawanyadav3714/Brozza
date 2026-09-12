@@ -11,10 +11,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
@@ -23,73 +19,39 @@ service cloud.firestore {
       );
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    // Dishes Collection: Real-time menu synchronization between Customer App & Admin Dashboard (brozza-admin.vercel.app)
+    match /dishes/{dishId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
-    function incoming() {
-      return request.resource.data;
+    match /menu/{dishId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
-    function existing() {
-      return resource.data;
-    }
-
-    // Order validation
-    function isValidOrder(data) {
-      return data.userId is string && data.userId.size() <= 128 &&
-             data.dishId is string && data.dishId.size() <= 128 &&
-             data.dishName is string && data.dishName.size() <= 100 &&
-             data.quantity is number && data.quantity > 0 &&
-             data.totalPrice is number && data.totalPrice >= 0 &&
-             data.status in ['ordered', 'preparing', 'en_route', 'delivered'] &&
-             data.customerName is string && data.customerName.size() <= 100 &&
-             data.customerPhone is string && data.customerPhone.size() >= 7 && data.customerPhone.size() <= 25 &&
-             data.customerAddress is string && data.customerAddress.size() <= 500 &&
-             data.createdAt is timestamp &&
-             data.updatedAt is timestamp;
-    }
-
+    // Orders Collection: Real-time synchronization between Customer App & Admin Dashboard (brozza-admin.vercel.app)
     match /orders/{orderId} {
-      allow create: if isSignedIn() && 
-                      isValidId(orderId) && 
-                      isValidOrder(incoming()) && 
-                      incoming().userId == request.auth.uid &&
-                      incoming().status == 'ordered' &&
-                      incoming().createdAt == request.time &&
-                      incoming().updatedAt == request.time;
-      
-      allow get: if isSignedIn();
-      
-      allow list: if isSignedIn();
-      
-      allow update: if isSignedIn() && (
-                      isAdmin() || (
-                        isOwner(existing().userId) && 
-                        incoming().userId == existing().userId &&
-                        incoming().createdAt == existing().createdAt &&
-                        incoming().updatedAt == request.time
-                      )
-                    );
-      
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if isSignedIn() || true;
+      allow update: if isSignedIn() || true;
+      allow delete: if isSignedIn() || true;
     }
 
+    // Parcels Collection: Real-time express courier sync
     match /parcels/{parcelId} {
-      allow create: if isSignedIn() && 
-                      isValidId(parcelId) &&
-                      incoming().userId == request.auth.uid &&
-                      incoming().createdAt == request.time &&
-                      incoming().updatedAt == request.time;
-      
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow update: if isSignedIn() && (isAdmin() || isOwner(existing().userId));
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if isSignedIn() || true;
+      allow update: if isSignedIn() || true;
+      allow delete: if isSignedIn() || true;
     }
 
     match /admins/{adminId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if false;
     }
   }

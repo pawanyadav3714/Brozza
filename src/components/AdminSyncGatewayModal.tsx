@@ -30,7 +30,7 @@ interface AdminSyncGatewayModalProps {
   onOpenInternalAdmin: () => void;
 }
 
-const EXTERNAL_ADMIN_URL = 'https://aistudio.google.com/apps/14528da1-7baf-4d9c-a2c5-f701aa8cea80?project=event-1b6b0&showAssistant=true&showPreview=true';
+const EXTERNAL_ADMIN_URL = 'https://brozza-admin.vercel.app/';
 
 export default function AdminSyncGatewayModal({
   isOpen,
@@ -39,6 +39,7 @@ export default function AdminSyncGatewayModal({
 }: AdminSyncGatewayModalProps) {
   const [recentParcels, setRecentParcels] = useState<Order[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedConfig, setCopiedConfig] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
@@ -138,17 +139,18 @@ export default function AdminSyncGatewayModal({
                 <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-400">
-                      <ShieldCheck className="w-4 h-4" />
+                      <ShieldCheck className="w-4 h-4 text-green-400" />
                       <span>Dedicated Admin Destination</span>
                     </div>
                     <h4 className="text-xl font-bold text-white">
-                      External Admin Dashboard (App 14528da1)
+                      Brozza Admin Portal (Vercel)
                     </h4>
                     <p className="text-xs text-gray-300 max-w-md leading-relaxed">
-                      Instead of receiving parcels solely inside this customer storefront, all orders are routed to Firebase so your administrative app receives the parcels instantly.
+                      All customer parcels & orders are synced to Firebase Firestore in real-time so your admin dashboard receives them immediately.
                     </p>
-                    <div className="text-[11px] font-mono text-gray-400 break-all bg-black/50 px-3 py-1.5 rounded-xl border border-white/10 inline-block">
-                      Project: <span className="text-amber-400">event-1b6b0</span> | Applet: <span className="text-red-400">14528da1-7baf...</span>
+                    <div className="text-[11px] font-mono text-gray-300 break-all bg-black/60 px-3 py-1.5 rounded-xl border border-white/15 inline-flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      <span>Host: <strong className="text-white">brozza-admin.vercel.app</strong></span>
                     </div>
                   </div>
 
@@ -156,9 +158,9 @@ export default function AdminSyncGatewayModal({
                     href={EXTERNAL_ADMIN_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-lg shadow-red-900/50 hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                    className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-xl shadow-red-900/50 hover:scale-105 active:scale-95 cursor-pointer shrink-0 border border-red-400/40"
                   >
-                    <span>Open Admin App</span>
+                    <span>Launch Admin Site ↗</span>
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 </div>
@@ -204,6 +206,41 @@ export default function AdminSyncGatewayModal({
                   <div className="text-[10px] text-gray-400">
                     Unique PRCL-BRZ IDs generated
                   </div>
+                </div>
+              </div>
+
+              {/* Firebase Direct Link & Credential Sync Panel */}
+              <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-gray-300">
+                    <Database className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Shared Firebase Configuration (for brozza-admin.vercel.app)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cfg = JSON.stringify({
+                        projectId: "commanding-palisade-58gvj",
+                        appId: "1:749088653483:web:196293fd4a7678ec2e37ee",
+                        apiKey: "AIzaSyAO_1T-8vlvcTRGd1X88Rs26_gqA85tI4Y",
+                        authDomain: "commanding-palisade-58gvj.firebaseapp.com",
+                        firestoreDatabaseId: "ai-studio-remixthebarozzac-0a0443a4-c36c-4a75-b9f6-4c49d5a7fd1d",
+                        storageBucket: "commanding-palisade-58gvj.firebasestorage.app",
+                        messagingSenderId: "749088653483"
+                      }, null, 2);
+                      navigator.clipboard.writeText(cfg);
+                      setCopiedConfig(true);
+                      setTimeout(() => setCopiedConfig(false), 2000);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-gray-200 hover:text-white transition-all cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3 text-gray-400" />
+                    <span>{copiedConfig ? 'Copied Config!' : 'Copy Firebase Config JSON'}</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-gray-400 bg-black/60 p-3 rounded-xl border border-white/5">
+                  <div>Project ID: <span className="text-white font-bold">commanding-palisade-58gvj</span></div>
+                  <div>Database ID: <span className="text-white font-bold">ai-studio-remixthebarozzac...</span></div>
                 </div>
               </div>
 
