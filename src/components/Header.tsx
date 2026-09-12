@@ -15,17 +15,12 @@ import {
   LogIn, 
   LogOut, 
   Mail, 
-  Sparkles,
   LayoutDashboard,
-  Utensils,
-  ExternalLink,
-  ShieldCheck
+  Utensils
 } from 'lucide-react';
 import { OrderStatus, Order } from '../types';
 import { useFirebase } from './FirebaseProvider';
 import { normalizePipelineStage } from './ParcelPipelineTracker';
-
-const ADMIN_SITE_URL = "https://brozza-admin.vercel.app/";
 
 interface HeaderProps {
   cartCount: number;
@@ -228,29 +223,6 @@ export default function Header({
                           <span className="truncate">{user.email}</span>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-gray-300 mb-3">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Signed in</span>
-                      <span className="text-gray-500">•</span>
-                      <span className="truncate text-gray-400">{user.email}</span>
-                    </div>
-
-                    {/* Discreet Admin Portal Link in Profile Popover */}
-                    <div className="mb-3">
-                      <a
-                        href={ADMIN_SITE_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 hover:text-white font-bold text-xs transition-all cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
-                          <span>Brozza Admin Portal</span>
-                        </div>
-                        <ExternalLink className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" />
-                      </a>
                     </div>
 
                     <div className="border-t border-white/10 pt-3">

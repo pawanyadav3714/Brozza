@@ -22,17 +22,16 @@ try {
   authInstance = getAuth(app);
 }
 
+const rawDbId = (firebaseConfig as any).firestoreDatabaseId;
+const dbId = rawDbId && rawDbId !== '(default)' && rawDbId !== '' ? rawDbId : undefined;
+
 let dbInstance;
 try {
-  dbInstance = initializeFirestore(
-    app,
-    {
-      experimentalForceLongPolling: true,
-    },
-    firebaseConfig.firestoreDatabaseId
-  );
+  dbInstance = dbId
+    ? initializeFirestore(app, { experimentalForceLongPolling: true }, dbId)
+    : initializeFirestore(app, { experimentalForceLongPolling: true });
 } catch {
-  dbInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  dbInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
 }
 
 export const auth = authInstance;

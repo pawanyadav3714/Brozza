@@ -23,6 +23,7 @@ import {
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order } from '../types';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 interface AdminSyncGatewayModalProps {
   isOpen: boolean;
@@ -219,15 +220,7 @@ export default function AdminSyncGatewayModal({
                   <button
                     type="button"
                     onClick={() => {
-                      const cfg = JSON.stringify({
-                        projectId: "commanding-palisade-58gvj",
-                        appId: "1:749088653483:web:196293fd4a7678ec2e37ee",
-                        apiKey: "AIzaSyAO_1T-8vlvcTRGd1X88Rs26_gqA85tI4Y",
-                        authDomain: "commanding-palisade-58gvj.firebaseapp.com",
-                        firestoreDatabaseId: "ai-studio-remixthebarozzac-0a0443a4-c36c-4a75-b9f6-4c49d5a7fd1d",
-                        storageBucket: "commanding-palisade-58gvj.firebasestorage.app",
-                        messagingSenderId: "749088653483"
-                      }, null, 2);
+                      const cfg = JSON.stringify(firebaseConfig, null, 2);
                       navigator.clipboard.writeText(cfg);
                       setCopiedConfig(true);
                       setTimeout(() => setCopiedConfig(false), 2000);
@@ -239,8 +232,8 @@ export default function AdminSyncGatewayModal({
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-gray-400 bg-black/60 p-3 rounded-xl border border-white/5">
-                  <div>Project ID: <span className="text-white font-bold">commanding-palisade-58gvj</span></div>
-                  <div>Database ID: <span className="text-white font-bold">ai-studio-remixthebarozzac...</span></div>
+                  <div>Project ID: <span className="text-white font-bold">{firebaseConfig.projectId}</span></div>
+                  <div>Database ID: <span className="text-white font-bold">{(firebaseConfig as any).firestoreDatabaseId || '(default)'}</span></div>
                 </div>
               </div>
 
