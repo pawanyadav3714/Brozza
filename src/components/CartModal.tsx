@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Dish, Order, PipelineStage } from '../types';
 import ParcelPipelineTracker, { normalizePipelineStage } from './ParcelPipelineTracker';
+import { useFirebase } from './FirebaseProvider';
 
 interface CartModalProps {
   isOpen: boolean;
@@ -36,9 +37,8 @@ export default function CartModal({
   onUpdateOrderStatus,
   onSelectDishForNewOrder
 }: CartModalProps) {
-  // Determine active tab: if user clicked "Add to Cart" or has selected dish, tab can be 'selection',
-  // otherwise default to 'orders' tab to show all order statuses.
-  const [activeTab, setActiveTab] = useState<'orders' | 'selection'>('orders');
+  const { user } = useFirebase();
+  const [activeTab, setActiveTab] = useState<'orders' | 'drafts' | 'selection'>('orders');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
@@ -72,6 +72,21 @@ export default function CartModal({
     (o) => normalizePipelineStage(o.status) !== 'Delivered'
   ).length;
 
+  // 7-Day Draft Recycling Logic
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  const draftOrders = orders.filter((order) => {
+    const stage = normalizePipelineStage(order.status);
+    // Draft stores Received or Delivered parcels
+    if (stage !== 'Received' && stage !== 'Delivered') return false;
+
+    // 7-day recycling check
+    const orderTime = order.createdAt?.seconds ? order.createdAt.seconds * 1000 : now;
+    const age = now - orderTime;
+    return age <= SEVEN_DAYS_MS;
+  });
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -94,18 +109,25 @@ export default function CartModal({
             className="fixed top-0 right-0 h-full w-full max-w-xl bg-neutral-950/95 backdrop-blur-3xl z-50 shadow-2xl flex flex-col border-l border-white/10 overflow-hidden"
           >
             {/* Header */}
-            <div className="p-5 sm:p-6 flex items-center justify-between border-b border-white/10 bg-black/30">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-600 to-amber-600 flex items-center justify-center shadow-lg shadow-red-900/30 text-white border border-white/20">
-                  <ShoppingBag className="w-5 h-5" />
+            <div className="p-4 sm:p-6 flex items-center justify-between border-b border-white/10 bg-black/30">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex flex-col items-center shrink-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shadow-lg shadow-red-900/30 border border-white/20 bg-neutral-900">
+                    <img 
+                      src="/images/unscriptedBanner.jpg" 
+                      alt="Banner Icon" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <h3 className="text-[10px] font-semibold text-gray-400 tracking-wider mt-0.5">developer</h3>
                 </div>
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
                     Orders & Bag
                   </h2>
-                  <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-red-400" />
-                    <span>Real-time Parcel Tracking & Dispatch</span>
+                  <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5 truncate">
+                    <Sparkles className="w-3 h-3 text-red-400 shrink-0" />
+                    <span className="truncate">{user?.email || 'Guest User'}</span>
                   </p>
                 </div>
               </div>
@@ -113,55 +135,73 @@ export default function CartModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-gray-400 hover:text-white cursor-pointer"
+                className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-gray-400 hover:text-white cursor-pointer shrink-0"
                 title="Close drawer"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            {/* Navigation Tabs (if dish is also selected) */}
-            <div className="px-5 pt-3 pb-2 border-b border-white/10 bg-neutral-900/50 flex items-center gap-2">
+            {/* Navigation Tabs (Mobile-responsive scrollable container) */}
+            <div className="px-3 sm:px-5 pt-3 pb-2 border-b border-white/10 bg-neutral-900/50 flex items-center gap-2 overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => setActiveTab('orders')}
-                className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                   activeTab === 'orders'
                     ? 'bg-red-600 text-white shadow-lg shadow-red-900/40'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                <Package className="w-4 h-4" />
+                <Package className="w-4 h-4 shrink-0" />
                 <span>All Orders</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                   activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-white/10 text-gray-300'
                 }`}>
                   {orders.length}
                 </span>
                 {activeOrdersCount > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('drafts')}
+                className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
+                  activeTab === 'drafts'
+                    ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Clock className="w-4 h-4 shrink-0" />
+                <span>Drafts (7d)</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                  activeTab === 'drafts' ? 'bg-white/20 text-white' : 'bg-white/10 text-gray-300'
+                }`}>
+                  {draftOrders.length}
+                </span>
               </button>
 
               {dish && (
                 <button
                   type="button"
                   onClick={() => setActiveTab('selection')}
-                  className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                     activeTab === 'selection'
                       ? 'bg-red-600 text-white shadow-lg shadow-red-900/40'
                       : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  <ShoppingBag className="w-4 h-4" />
+                  <ShoppingBag className="w-4 h-4 shrink-0" />
                   <span>Item in Bag</span>
-                  <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse shrink-0" />
                 </button>
               )}
             </div>
 
             {/* Body Content */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-6">
               {activeTab === 'orders' ? (
                 /* Orders List with Pipeline trackers */
                 <div className="space-y-6">
@@ -198,17 +238,17 @@ export default function CartModal({
                           layout
                           initial={{ opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="rounded-3xl bg-neutral-900/80 border border-white/10 p-5 sm:p-6 space-y-4 shadow-xl hover:border-white/20 transition-all relative overflow-hidden"
+                          className="rounded-3xl bg-neutral-900/80 border border-white/10 p-4 sm:p-6 space-y-4 shadow-xl hover:border-white/20 transition-all relative overflow-hidden"
                         >
                           {/* Order Header / Small Status Bar */}
-                          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-gray-400">
+                          <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-xs font-bold text-gray-400 shrink-0">
                                 #{order.id.slice(-6).toUpperCase()}
                               </span>
-                              <span className="text-gray-600 text-xs">•</span>
-                              <span className="text-gray-400 text-xs flex items-center gap-1 font-medium">
-                                <Clock className="w-3 h-3 text-gray-500" />
+                              <span className="text-gray-600 text-xs shrink-0">•</span>
+                              <span className="text-gray-400 text-xs flex items-center gap-1 font-medium truncate">
+                                <Clock className="w-3 h-3 text-gray-500 shrink-0" />
                                 {order.createdAt?.seconds 
                                   ? new Date(order.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                   : 'Active'}
@@ -216,24 +256,24 @@ export default function CartModal({
                             </div>
 
                             {/* Small Status Badge with Dynamic Color & Blinking */}
-                            <div>
+                            <div className="shrink-0">
                               {isPending && (
-                                <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-500/20 border border-red-500/40 text-red-300 flex items-center gap-1.5 shadow-sm">
-                                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.9)]" />
+                                <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-red-500/20 border border-red-500/40 text-red-300 flex items-center gap-1.5 shadow-sm">
+                                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.9)] shrink-0" />
                                   Pending
                                 </span>
                               )}
 
                               {isAcceptedOrProgress && (
-                                <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 shadow-sm">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
+                                <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 shadow-sm">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.9)] shrink-0" />
                                   {stage === 'Received' ? 'Accepted' : stage}
                                 </span>
                               )}
 
                               {isDelivered && (
-                                <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-600 border border-emerald-400 text-white flex items-center gap-1.5 shadow-md">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-emerald-600 border border-emerald-400 text-white flex items-center gap-1.5 shadow-md">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
                                   Delivered
                                 </span>
                               )}
@@ -241,17 +281,17 @@ export default function CartModal({
                           </div>
 
                           {/* Product Summary Row */}
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
                               {order.dishImage && (
                                 <img
                                   src={order.dishImage}
                                   alt={order.dishName}
-                                  className="w-14 h-14 rounded-2xl object-cover border border-white/10 shrink-0 shadow-md"
+                                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-white/10 shrink-0 shadow-md"
                                 />
                               )}
                               <div className="min-w-0">
-                                <h4 className="text-white font-black text-base truncate tracking-tight">
+                                <h4 className="text-white font-black text-sm sm:text-base truncate tracking-tight">
                                   {order.dishName}
                                 </h4>
                                 <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
@@ -264,7 +304,7 @@ export default function CartModal({
 
                             {/* Parcel ID Badge */}
                             {order.parcelId && (
-                              <div className="shrink-0 flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1.5 rounded-xl text-xs">
+                              <div className="shrink-0 flex items-center gap-1.5 bg-black/40 border border-white/10 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-xs">
                                 <span className="font-mono text-gray-300 text-[10px] hidden sm:inline">
                                   {order.parcelId}
                                 </span>
@@ -283,7 +323,112 @@ export default function CartModal({
                             )}
                           </div>
 
-                          {/* Order Fulfillment Pipeline Tracker (Read-only for customers, updated by admin) */}
+                          {/* Order Fulfillment Pipeline Tracker (Responsive mobile view) */}
+                          <ParcelPipelineTracker
+                            currentStatus={order.status}
+                            readOnly={true}
+                          />
+                        </motion.div>
+                      );
+                    })
+                  )}
+                </div>
+              ) : activeTab === 'drafts' ? (
+                /* Drafts Tab (Received & Delivered parcels, 7-day retention) */
+                <div className="space-y-6">
+                  <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 text-xs text-amber-300/90 flex items-start gap-2.5">
+                    <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <span className="font-bold text-white block mb-0.5">Draft Archive (7-Day Auto-Recycle):</span> 
+                      Stored here are all received and delivered parcels. Automatically recycled and purged after 7 days.
+                    </div>
+                  </div>
+
+                  {draftOrders.length === 0 ? (
+                    <div className="text-center py-16 px-4 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
+                      <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400">
+                        <Clock className="w-8 h-8" />
+                      </div>
+                      <h3 className="text-lg font-black text-white">No Draft Parcels Found</h3>
+                      <p className="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed">
+                        Parcels that have reached the Received or Delivered stage will appear in this draft archive for up to 7 days.
+                      </p>
+                    </div>
+                  ) : (
+                    draftOrders.map((order) => {
+                      const stage = normalizePipelineStage(order.status);
+                      const isDelivered = stage === 'Delivered';
+
+                      return (
+                        <motion.div
+                          key={order.id}
+                          layout
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="rounded-3xl bg-neutral-900/80 border border-amber-500/20 p-4 sm:p-6 space-y-4 shadow-xl relative overflow-hidden"
+                        >
+                          {/* Order Header */}
+                          <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-xs font-bold text-amber-400/90 shrink-0">
+                                DRAFT #{order.id.slice(-6).toUpperCase()}
+                              </span>
+                              <span className="text-gray-600 text-xs shrink-0">•</span>
+                              <span className="text-gray-400 text-xs flex items-center gap-1 font-medium truncate">
+                                <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                                {order.createdAt?.seconds 
+                                  ? new Date(order.createdAt.seconds * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                                  : 'Recent'}
+                              </span>
+                            </div>
+
+                            <div className="shrink-0">
+                              {isDelivered ? (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600 border border-emerald-400 text-white flex items-center gap-1.5 shadow-md">
+                                  <CheckCircle2 className="w-3 h-3 text-white shrink-0" />
+                                  Delivered & Archived
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                                  Received Archive
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Product Summary Row */}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              {order.dishImage && (
+                                <img
+                                  src={order.dishImage}
+                                  alt={order.dishName}
+                                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-white/10 shrink-0 shadow-md"
+                                />
+                              )}
+                              <div className="min-w-0">
+                                <h4 className="text-white font-black text-sm sm:text-base truncate tracking-tight">
+                                  {order.dishName}
+                                </h4>
+                                <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                                  <span>Qty: <strong className="text-white font-bold">{order.quantity}</strong></span>
+                                  <span className="text-gray-600">•</span>
+                                  <span className="text-amber-400 font-bold">₹{(order.totalPrice || 0).toFixed(2)}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {order.parcelId && (
+                              <div className="shrink-0 flex items-center gap-1.5 bg-black/40 border border-white/10 px-2 py-1 rounded-xl text-xs">
+                                <span className="font-mono text-gray-300 text-[10px]">
+                                  {order.parcelId}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Compact Pipeline Tracker */}
                           <ParcelPipelineTracker
                             currentStatus={order.status}
                             readOnly={true}

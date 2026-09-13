@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Loader2, Clock, Truck, Package, Flame } from 'lucide-react';
 import { PipelineStage } from '../types';
 
 interface ParcelPipelineTrackerProps {
@@ -35,6 +36,14 @@ export function normalizePipelineStage(status?: string): PipelineStage {
   return 'Pending';
 }
 
+const STAGE_ICONS: Record<PipelineStage, React.ReactNode> = {
+  'Pending': <Clock className="w-3 h-3" />,
+  'Received': <Package className="w-3 h-3" />,
+  'Processing': <Flame className="w-3 h-3" />,
+  'Out For_delivery': <Truck className="w-3 h-3" />,
+  'Delivered': <CheckCircle2 className="w-3 h-3" />,
+};
+
 export default function ParcelPipelineTracker({
   currentStatus,
   onUpdateStage,
@@ -42,16 +51,18 @@ export default function ParcelPipelineTracker({
   readOnly = true,
 }: ParcelPipelineTrackerProps) {
   const activeStage = normalizePipelineStage(currentStatus);
+  const activeIndex = PIPELINE_STAGES.indexOf(activeStage);
 
   return (
-    <div className="rounded-xl bg-[#090e1c] border border-blue-900/25 p-3 sm:p-3.5 shadow-xl relative overflow-hidden">
+    <div className="rounded-xl bg-[#090e1c] border border-blue-900/25 p-3.5 sm:p-4 shadow-xl relative overflow-hidden">
       {/* Background ambient gradient glow */}
-      <div className="absolute -top-10 -right-10 w-28 h-28 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
+      <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
 
       {/* Header bar */}
-      <div className="flex items-center justify-between gap-2 mb-2.5">
+      <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-wider text-gray-300 uppercase">
+          <span className="text-[11px] font-mono font-bold tracking-wider text-gray-200 uppercase flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
             Order Fulfillment Pipeline
           </span>
         </div>
@@ -63,64 +74,64 @@ export default function ParcelPipelineTracker({
         </div>
       </div>
 
-      {/* Pipeline Stage Buttons Row - Slightly smaller, professional styling */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2">
-        {PIPELINE_STAGES.map((stage) => {
+      {/* Sequential Steps Container: Vertical on mobile for crystal clear sequential order, horizontal on sm+ */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-1.5 relative">
+        {PIPELINE_STAGES.map((stage, idx) => {
           const isActive = activeStage === stage;
-          const isDeliveredStage = stage === 'Delivered';
+          const isPassed = idx < activeIndex;
           const isPendingStage = stage === 'Pending';
+          const isDeliveredStage = stage === 'Delivered';
           const isAcceptedOrProgressStage =
             stage === 'Received' || stage === 'Processing' || stage === 'Out For_delivery';
 
-          let activeStyle = '';
+          let stateClasses = '';
           if (isActive) {
             if (isPendingStage) {
-              // Dynamic RED BLINKING button when Pending
-              activeStyle =
-                'bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white font-bold shadow-md shadow-red-600/40 animate-pulse ring-1 ring-red-400/80 border border-red-300';
+              stateClasses = 'bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white font-bold shadow-md shadow-red-600/40 animate-pulse ring-1 ring-red-400/85 border border-red-300';
             } else if (isAcceptedOrProgressStage) {
-              // Dynamic GREEN BLINKING button when accepted / received / in progress
-              activeStyle =
-                'bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-600 text-white font-bold shadow-md shadow-emerald-500/40 animate-pulse ring-1 ring-emerald-400/80 border border-emerald-300';
+              stateClasses = 'bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-600 text-white font-bold shadow-md shadow-emerald-500/40 animate-pulse ring-1 ring-emerald-400/85 border border-emerald-300';
             } else if (isDeliveredStage) {
-              // PERMANENTLY GREEN (no pulse/blinking) when delivered
-              activeStyle =
-                'bg-emerald-600 text-white font-bold border border-emerald-400 shadow-sm shadow-emerald-950/60';
+              stateClasses = 'bg-emerald-600 text-white font-bold border border-emerald-400 shadow-sm shadow-emerald-950/60';
             }
+          } else if (isPassed) {
+            stateClasses = 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50 font-medium opacity-90';
           } else {
-            activeStyle =
-              'bg-white/[0.03] text-gray-400 border border-white/[0.08] font-medium';
+            stateClasses = 'bg-white/[0.03] text-gray-400 border border-white/[0.08] font-medium';
           }
 
           const isClickable = !readOnly && !isUpdating;
+          const displayName = stage === 'Out For_delivery' ? 'Out For Delivery' : stage;
 
           return (
             <motion.button
               key={stage}
               type="button"
               disabled={!isClickable}
-              whileTap={isClickable ? { scale: 0.96 } : undefined}
+              whileTap={isClickable ? { scale: 0.97 } : undefined}
               onClick={() => isClickable && onUpdateStage && onUpdateStage(stage)}
-              className={`relative px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-[11px] tracking-wide transition-all flex items-center justify-center gap-1.5 select-none ${
-                isClickable ? 'cursor-pointer hover:border-white/20' : 'cursor-default pointer-events-none'
-              } ${activeStyle}`}
-              title={readOnly ? `Current pipeline stage: ${stage}` : `Set order status to ${stage}`}
+              className={`relative flex-1 px-3 py-2 sm:py-2.5 rounded-lg text-[11px] tracking-wide transition-all flex items-center sm:flex-col justify-start sm:justify-center gap-2 sm:gap-1.5 select-none ${
+                isClickable ? 'cursor-pointer hover:border-white/25 hover:bg-white/[0.06]' : 'cursor-default pointer-events-none'
+              } ${stateClasses}`}
+              title={readOnly ? `Current pipeline stage: ${displayName}` : `Set order status to ${displayName}`}
             >
-              {/* Dynamic blinking indicator dot for active stage */}
-              {isActive && isPendingStage && (
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping shrink-0" />
-              )}
-              {isActive && isAcceptedOrProgressStage && (
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping shrink-0" />
-              )}
-              {isActive && isDeliveredStage && (
-                <CheckCircle2 className="w-3 h-3 text-white shrink-0" />
-              )}
+              {/* Step number badge & icon */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-mono font-bold ${
+                  isActive ? 'bg-white text-black' : isPassed ? 'bg-emerald-500 text-black' : 'bg-white/10 text-gray-300'
+                }`}>
+                  {idx + 1}
+                </span>
+                <span className="shrink-0 opacity-90">
+                  {STAGE_ICONS[stage]}
+                </span>
+              </div>
 
-              <span className="truncate">{stage}</span>
+              <span className="truncate text-left sm:text-center font-medium">
+                {displayName}
+              </span>
 
               {isUpdating && isActive && (
-                <Loader2 className="w-2.5 h-2.5 animate-spin ml-1" />
+                <Loader2 className="w-3 h-3 animate-spin ml-auto sm:ml-0" />
               )}
             </motion.button>
           );

@@ -17,7 +17,6 @@ import PaymentStep from './components/PaymentStep';
 import SuccessStep from './components/SuccessStep';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSyncGatewayModal from './components/AdminSyncGatewayModal';
-import DishSlideshow from './components/DishSlideshow';
 import { DISHES, INITIAL_INVENTORY } from './data';
 import { Dish, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage } from './types';
 import { normalizePipelineStage } from './components/ParcelPipelineTracker';
@@ -203,29 +202,40 @@ export default function App() {
     localStorage.removeItem('barozza_cafe_inventory');
   };
 
-  // Real-time live orders tracking across the storefront
+  // Real-time live orders tracking across the storefront (filtered by current user)
   useEffect(() => {
-    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(30));
+    const q = query(collection(db, 'orders'), limit(50));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const list = snapshot.docs
-            .filter((docSnap) => docSnap.id !== 'barozza_menu_catalog' && !docSnap.data().isCatalog)
-            .map((docSnap) => {
-              const data = docSnap.data();
-              return {
-                id: docSnap.id,
-                ...data,
-                dishImage: data.dishImage || dishes.find((d) => d.id === data.dishId)?.image || '/images/frenchh.png',
-              } as Order;
-            });
-          setOrders(list);
-          try {
-            localStorage.setItem('barozza_cafe_orders', JSON.stringify(list));
-          } catch (e) {
-            console.warn('Failed to cache orders:', e);
-          }
+        const list = snapshot.docs
+          .filter((docSnap) => {
+            if (docSnap.id === 'barozza_menu_catalog' || docSnap.data().isCatalog) return false;
+            const data = docSnap.data();
+            if (user && data.userId && data.userId !== user.uid) {
+              return false;
+            }
+            return true;
+          })
+          .map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              ...data,
+              dishImage: data.dishImage || dishes.find((d) => d.id === data.dishId)?.image || '/images/frenchh.png',
+            } as Order;
+          })
+          .sort((a, b) => {
+            const timeA = (a.createdAt as any)?.seconds || 0;
+            const timeB = (b.createdAt as any)?.seconds || 0;
+            return timeB - timeA;
+          });
+
+        setOrders(list);
+        try {
+          localStorage.setItem('barozza_cafe_orders', JSON.stringify(list));
+        } catch (e) {
+          console.warn('Failed to cache orders:', e);
         }
       },
       (error) => {
@@ -234,7 +244,7 @@ export default function App() {
     );
 
     return () => unsubscribe();
-  }, [dishes]);
+  }, [dishes, user]);
 
   // Real-time single active order tracking
   useEffect(() => {
@@ -436,7 +446,6 @@ export default function App() {
   if (step === 'admin') {
     return (
       <div className="min-h-screen bg-black font-sans text-white selection:bg-red-500/30 selection:text-white">
-        <DishSlideshow dishes={dishes} />
         <div className="relative z-10">
           <Header 
             cartCount={selectedDish ? 1 : 0} 
@@ -469,7 +478,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black font-sans text-white selection:bg-red-500/30 selection:text-white">
-      <DishSlideshow dishes={dishes} />
       
       <div className="relative z-10">
         <Header 

@@ -10,7 +10,7 @@ export const DISHES: Dish[] = [
     id: '1',
     name: 'French Fries',
     price: 30,
-    image: '/images/frenchh.png',
+    image: '/images/unscriptedBanner.jpg',
     description: 'Crispy golden fries served hot and fresh.',
     category: 'Starters'
   },
@@ -101,6 +101,54 @@ export const DISHES: Dish[] = [
     image: '/images/eggrol.png',
     description: 'A classic street food favorite with fluffy egg and zesty red onions.',
     category: 'Rolls'
+  },
+  {
+    id: '13',
+    name: 'Paneer Roll',
+    price: 50,
+    image: '/images/paneerchili.png',
+    description: 'Juicy paneer chunks wrapped with crunchy veggies and sauces.',
+    category: 'Rolls'
+  },
+  {
+    id: '14',
+    name: 'Cold Coffee with Ice Cream',
+    price: 90,
+    image: '/images/coldcoffe.png',
+    description: 'Blended chilled coffee topped with rich vanilla ice cream.',
+    category: 'Beverages'
+  },
+  {
+    id: '15',
+    name: 'Veg Fried Rice',
+    price: 60,
+    image: '/images/chow.png',
+    description: 'Fragrant basmati rice wok-tossed with fresh garden vegetables.',
+    category: 'Chinese'
+  },
+  {
+    id: '16',
+    name: 'Schezwan Noodles',
+    price: 70,
+    image: '/images/eggchowminn.png',
+    description: 'Fiery wok-tossed noodles in pungent Schezwan chili garlic sauce.',
+    category: 'Chinese'
+  },
+  {
+    id: '17',
+    name: 'Cheesy Garlic Bread',
+    price: 85,
+    image: '/images/pastaa.png',
+    description: 'Toasted artisanal bread loaded with melted mozzarella and herbs.',
+    category: 'Italian'
+  },
+  {
+    id: '18',
+    name: 'Unscripted Special Banner Item',
+    price: 120,
+    image: '/images/unscriptedBanner.jpg',
+    description: 'Featured house special creation displayed via unscripted banner.',
+    category: 'Specials'
   }
 ];
 
