@@ -99,57 +99,57 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
   };
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-12">
+    <div className="max-w-xl mx-auto px-4 py-6 sm:py-8">
       <button 
         onClick={onBack}
-        className="flex items-center gap-2 text-gray-400 hover:text-white mb-10 transition-colors font-bold"
+        className="flex items-center gap-1.5 text-gray-400 hover:text-white mb-6 transition-colors font-bold text-xs sm:text-sm"
       >
-        <ArrowLeft className="w-5 h-5" />
+        <ArrowLeft className="w-4 h-4" />
         Back to Details
       </button>
 
-      <div className="mb-12 text-center sm:text-left">
-        <h2 className="text-5xl font-black text-white mb-4 tracking-tight">Payment</h2>
-        <p className="text-gray-400 text-xl font-medium">Choose your preferred way to settle the tab.</p>
+      <div className="mb-6">
+        <h2 className="text-2xl sm:text-3xl font-black text-white mb-1 tracking-tight">Payment</h2>
+        <p className="text-gray-400 text-xs sm:text-sm font-medium">Choose your preferred way to settle the tab.</p>
       </div>
 
-      <div className="bg-red-600 text-white p-10 rounded-[3rem] mb-12 flex justify-between items-center overflow-hidden relative shadow-2xl shadow-red-900/20 border border-red-500">
+      <div className="bg-red-600 text-white px-6 py-5 rounded-2xl mb-6 flex justify-between items-center overflow-hidden relative shadow-xl shadow-red-900/25 border border-red-500">
         <div className="relative z-10">
-          <p className="text-red-200 text-sm font-black uppercase tracking-widest mb-2">Total Amount</p>
-          <p className="text-5xl font-black tracking-tighter">₹{totalPrice.toFixed(2)}</p>
+          <p className="text-red-200 text-[10px] font-black uppercase tracking-widest mb-0.5">Total Amount</p>
+          <p className="text-3xl font-black tracking-tighter">₹{totalPrice.toFixed(2)}</p>
         </div>
-        <CreditCard className="w-32 h-32 text-white/10 absolute -right-6 -bottom-6 rotate-12" />
+        <CreditCard className="w-20 h-20 text-white/10 absolute -right-4 -bottom-4 rotate-12" />
       </div>
 
       {!user ? (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-10 mb-12 text-center shadow-3xl"
+          className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-2xl p-6 mb-6 text-center shadow-2xl"
         >
-          <LogIn className="w-12 h-12 text-red-500 mx-auto mb-6" />
-          <h3 className="text-2xl font-black text-white mb-4">Authentication Required</h3>
-          <p className="text-gray-400 font-medium leading-relaxed mb-8">Please sign in with Google to securely place your order and track its progress.</p>
+          <LogIn className="w-10 h-10 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-black text-white mb-2">Authentication Required</h3>
+          <p className="text-gray-400 text-xs sm:text-sm font-medium leading-relaxed mb-6">Please sign in with Google to securely place your order and track its progress.</p>
           <button
             onClick={signInWithGoogle}
             disabled={isSigningIn}
-            className="w-full py-4 bg-white text-black font-black rounded-2xl hover:bg-gray-200 transition-all shadow-xl disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3 bg-white text-black font-black text-sm rounded-xl hover:bg-gray-200 transition-all shadow-lg disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
           >
-            {isSigningIn ? <Loader2 className="w-5 h-5 animate-spin text-black" /> : null}
+            {isSigningIn ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : null}
             <span>{isSigningIn ? 'Connecting to Google...' : 'Sign In with Google'}</span>
           </button>
         </motion.div>
       ) : (
         <>
           {errorMessage && (
-            <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm font-medium flex items-center gap-3">
+            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-medium flex items-center gap-2.5">
               <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
               <p className="flex-1">{errorMessage}</p>
             </div>
           )}
 
-          <div className="space-y-4 mb-8">
-            {/* Razorpay Online Payment Option */}
+          <div className="space-y-3 mb-6">
+            {/* UPI & Online Payment Option */}
             <motion.button
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
@@ -157,24 +157,24 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
                 setMethod('razorpay');
                 setErrorMessage(null);
               }}
-              className={`w-full p-6 sm:p-8 rounded-[2.5rem] border-2 flex items-center gap-5 sm:gap-6 transition-all backdrop-blur-xl relative overflow-hidden ${
-                method === 'razorpay' ? 'border-red-500 bg-red-500/10 shadow-xl shadow-red-950/30' : 'border-white/5 bg-white/5 hover:bg-white/10'
+              className={`w-full p-4 sm:p-5 rounded-2xl border-2 flex items-center gap-4 transition-all backdrop-blur-xl relative overflow-hidden ${
+                method === 'razorpay' ? 'border-red-500 bg-red-500/10 shadow-lg shadow-red-950/30' : 'border-white/5 bg-white/5 hover:bg-white/10'
               }`}
             >
-              <div className={`p-4 rounded-2xl shrink-0 ${method === 'razorpay' ? 'bg-red-600 text-white shadow-lg shadow-red-900/50' : 'bg-white/10 text-gray-400'}`}>
-                <Zap className="w-7 h-7" />
+              <div className={`p-3 rounded-xl shrink-0 ${method === 'razorpay' ? 'bg-red-600 text-white shadow-md shadow-red-900/50' : 'bg-white/10 text-gray-400'}`}>
+                <QrCode className="w-5 h-5" />
               </div>
               <div className="text-left flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h3 className="font-black text-xl text-white">Razorpay Live Checkout</h3>
-                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                  <h3 className="font-black text-base text-white">UPI & Online Payment</h3>
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    LIVE
+                    INSTANT UPI
                   </span>
                 </div>
-                <p className="text-sm text-gray-300 font-medium">UPI QR, GPay, PhonePe, Paytm, Cards & NetBanking</p>
+                <p className="text-xs text-gray-300 font-medium">GPay, PhonePe, Paytm, BHIM UPI, Cards & NetBanking</p>
               </div>
-              {method === 'razorpay' && <CheckCircle2 className="w-7 h-7 text-red-500 shrink-0" />}
+              {method === 'razorpay' && <CheckCircle2 className="w-5 h-5 text-red-500 shrink-0" />}
             </motion.button>
 
             {/* Cash On Delivery Option */}
@@ -185,98 +185,43 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
                 setMethod('cod');
                 setErrorMessage(null);
               }}
-              className={`w-full p-6 sm:p-8 rounded-[2.5rem] border-2 flex items-center gap-5 sm:gap-6 transition-all backdrop-blur-xl ${
+              className={`w-full p-4 sm:p-5 rounded-2xl border-2 flex items-center gap-4 transition-all backdrop-blur-xl ${
                 method === 'cod' ? 'border-red-500 bg-red-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10'
               }`}
             >
-              <div className={`p-4 rounded-2xl shrink-0 ${method === 'cod' ? 'bg-red-600 text-white' : 'bg-white/10 text-gray-400'}`}>
-                <Wallet className="w-7 h-7" />
+              <div className={`p-3 rounded-xl shrink-0 ${method === 'cod' ? 'bg-red-600 text-white' : 'bg-white/10 text-gray-400'}`}>
+                <Wallet className="w-5 h-5" />
               </div>
               <div className="text-left flex-1 min-w-0">
-                <h3 className="font-black text-xl text-white">Cash on Delivery</h3>
-                <p className="text-sm text-gray-400 font-medium">Pay at your doorstep upon parcel arrival</p>
+                <h3 className="font-black text-base text-white">Cash on Delivery</h3>
+                <p className="text-xs text-gray-400 font-medium">Pay at your doorstep upon parcel arrival</p>
               </div>
-              {method === 'cod' && <CheckCircle2 className="w-7 h-7 text-red-500 shrink-0" />}
+              {method === 'cod' && <CheckCircle2 className="w-5 h-5 text-red-500 shrink-0" />}
             </motion.button>
           </div>
 
-          <AnimatePresence>
-            {method === 'razorpay' && (
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 15 }}
-                className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 sm:p-8 mb-8"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    <p className="text-xs font-black text-emerald-400 uppercase tracking-widest">Razorpay 256-Bit SSL Protected</p>
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-400 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">Instant Verification</span>
-                </div>
-
-                <p className="text-xs text-gray-300 font-medium leading-relaxed mb-5">
-                  Opening the checkout window will give you instant access to pay via:
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
-                  <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3">
-                    <QrCode className="w-5 h-5 text-red-400 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-white">Dynamic UPI QR Code</p>
-                      <p className="text-[10px] text-gray-400">Scan with any UPI app on phone</p>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3">
-                    <Zap className="w-5 h-5 text-amber-400 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-white">UPI Apps & Intent</p>
-                      <p className="text-[10px] text-gray-400">Google Pay, PhonePe, Paytm, BHIM</p>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3">
-                    <CreditCard className="w-5 h-5 text-blue-400 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-white">Debit & Credit Cards</p>
-                      <p className="text-[10px] text-gray-400">Visa, MasterCard, RuPay, Maestro</p>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3">
-                    <Wallet className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-white">NetBanking & Wallets</p>
-                      <p className="text-[10px] text-gray-400">50+ Indian banks & major wallets</p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Razorpay details box removed */}
 
           <button
             disabled={!method || isProcessing}
             onClick={handleConfirm}
-            className={`w-full py-6 rounded-[2rem] font-black text-xl flex items-center justify-center gap-3 shadow-2xl transition-all active:scale-95 cursor-pointer ${
+            className={`w-full py-4 rounded-xl font-black text-base flex items-center justify-center gap-2.5 shadow-xl transition-all active:scale-95 cursor-pointer ${
               !method ? 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5' : 'bg-red-600 text-white hover:bg-red-700 shadow-red-900/40'
             }`}
           >
             {isProcessing ? (
               <>
-                <Loader2 className="w-6 h-6 animate-spin" />
-                Processing Payment Gateway...
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Processing Gateway...
               </>
             ) : (
               <>
                 {method === 'razorpay' ? (
-                  `Pay ₹${totalPrice.toFixed(2)} with Razorpay`
+                  `Pay ₹${totalPrice.toFixed(2)} with UPI`
                 ) : (
                   'Place Order (Cash on Delivery)'
                 )}
-                <ArrowLeft className="w-6 h-6 rotate-180" />
+                <ArrowLeft className="w-5 h-5 rotate-180" />
               </>
             )}
           </button>

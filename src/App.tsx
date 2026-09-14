@@ -17,6 +17,8 @@ import PaymentStep from './components/PaymentStep';
 import SuccessStep from './components/SuccessStep';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSyncGatewayModal from './components/AdminSyncGatewayModal';
+import ContactModal from './components/ContactModal';
+import { PhoneCall } from 'lucide-react';
 import { DISHES, INITIAL_INVENTORY } from './data';
 import { Dish, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage } from './types';
 import { normalizePipelineStage } from './components/ParcelPipelineTracker';
@@ -71,6 +73,8 @@ export default function App() {
   const [lastPaymentInfo, setLastPaymentInfo] = useState<{ method?: string; paymentId?: string } | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
+  const [maxPriceFilter, setMaxPriceFilter] = useState<number | null>(null);
+  const [isContactOpen, setIsContactOpen] = useState(false);
 
   // Real-time live orders list with persistence and fallback
   const [orders, setOrders] = useState<Order[]>(() => {
@@ -437,11 +441,17 @@ export default function App() {
 
   // Filter dishes for customer menu
   const displayedDishes = useMemo(() => {
-    if (selectedFilter === 'All') return dishes;
-    return dishes.filter(
-      (d) => (d.category || 'General').trim().toLowerCase() === selectedFilter.trim().toLowerCase()
-    );
-  }, [dishes, selectedFilter]);
+    let result = dishes;
+    if (selectedFilter !== 'All') {
+      result = result.filter(
+        (d) => (d.category || 'General').trim().toLowerCase() === selectedFilter.trim().toLowerCase()
+      );
+    }
+    if (maxPriceFilter !== null) {
+      result = result.filter((d) => d.price <= maxPriceFilter);
+    }
+    return result;
+  }, [dishes, selectedFilter, maxPriceFilter]);
 
   if (step === 'admin') {
     return (
@@ -499,8 +509,8 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
               >
-                <div className="max-w-7xl mx-auto px-4 py-16 sm:py-20">
-                  <div className="flex flex-col items-center text-center gap-6 mb-16 sm:mb-20">
+                <div className="max-w-7xl mx-auto px-4 pt-4 pb-8 sm:py-12">
+                  <div className="flex flex-col items-center text-center gap-6 mb-8 sm:mb-12">
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -542,20 +552,31 @@ export default function App() {
                       </p>
                     </motion.div>
                     
-                    {/* Category Filter Pills (Dynamically populated from all active dishes) */}
-                    <div className="flex flex-wrap justify-center gap-2.5">
-                      {availableCategories.map((filter) => (
-                        <button 
-                          key={filter}
+                    {/* Price Filter Pills */}
+                    <div className="flex flex-wrap sm:flex-nowrap justify-center items-center gap-1.5 sm:gap-2 -mt-4 mb-2 max-w-full px-2 w-full py-2">
+                      <button
+                        type="button"
+                        onClick={() => setMaxPriceFilter(null)}
+                        className={`shrink-0 px-2 py-1 sm:px-4 sm:py-2 backdrop-blur-md rounded-full text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-lg cursor-pointer ${
+                          maxPriceFilter === null
+                            ? 'bg-red-600 border border-red-400 text-white shadow-red-900/50 scale-105'
+                            : 'bg-white/10 border border-white/20 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500'
+                        }`}
+                      >
+                        All Prices
+                      </button>
+                      {[30, 40, 60, 70, 90].map((price) => (
+                        <button
+                          key={price}
                           type="button"
-                          onClick={() => setSelectedFilter(filter)}
-                          className={`px-5 py-2 backdrop-blur-md rounded-full text-xs font-black uppercase tracking-wider transition-all shadow-lg cursor-pointer ${
-                            selectedFilter.toLowerCase() === filter.toLowerCase()
+                          onClick={() => setMaxPriceFilter(price)}
+                          className={`shrink-0 px-2 py-1 sm:px-4 sm:py-2 backdrop-blur-md rounded-full text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-lg cursor-pointer ${
+                            maxPriceFilter === price
                               ? 'bg-red-600 border border-red-400 text-white shadow-red-900/50 scale-105'
                               : 'bg-white/10 border border-white/20 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500'
                           }`}
                         >
-                          {filter}
+                          ₹{price} & Below
                         </button>
                       ))}
                     </div>
@@ -708,6 +729,22 @@ export default function App() {
           setIsSyncModalOpen(false);
           setStep('admin');
         }}
+      />
+
+      {/* Floating Contact Us Button */}
+      <button
+        type="button"
+        onClick={() => setIsContactOpen(true)}
+        className="fixed bottom-6 right-6 z-40 bg-black/40 backdrop-blur-xl text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-2xl shadow-black/50 flex items-center gap-2 font-bold text-xs uppercase tracking-wider border border-white/25 hover:bg-black/70 hover:border-white/50 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
+        title="Contact Us"
+      >
+        <PhoneCall className="w-5 h-5 text-red-400 group-hover:scale-110 transition-transform shrink-0" />
+        <span className="hidden sm:inline">Contact Us</span>
+      </button>
+
+      <ContactModal
+        isOpen={isContactOpen}
+        onClose={() => setIsContactOpen(false)}
       />
     </div>
   );

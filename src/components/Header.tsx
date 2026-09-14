@@ -179,7 +179,7 @@ export default function Header({
               <button
                 type="button"
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="w-11 h-11 rounded-2xl bg-gradient-to-br from-red-600 via-red-500 to-amber-600 text-white font-black text-sm tracking-wider flex items-center justify-center shadow-lg shadow-red-900/30 border border-white/20 hover:scale-105 active:scale-95 transition-all cursor-pointer select-none"
+                className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-xl text-white font-black text-sm tracking-wider flex items-center justify-center shadow-lg border border-white/25 hover:bg-white/20 hover:border-white/45 hover:scale-105 active:scale-95 transition-all cursor-pointer select-none"
                 title={`${formattedName} (${user.email})`}
                 aria-label="User Profile"
               >

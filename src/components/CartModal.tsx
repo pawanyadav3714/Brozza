@@ -455,36 +455,36 @@ export default function CartModal({
                       </div>
                     </div>
 
-                    <div className="bg-white/5 rounded-3xl p-6 border border-white/10">
-                      <div className="flex items-center justify-between mb-6">
-                        <span className="font-bold text-gray-300 text-sm">Quantity</span>
-                        <div className="flex items-center gap-5 bg-black/50 rounded-2xl p-1.5 border border-white/10">
+                    <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="font-bold text-gray-300 text-xs">Quantity</span>
+                        <div className="flex items-center gap-3 bg-black/50 rounded-xl p-1 border border-white/10">
                           <button
                             type="button"
                             onClick={() => onUpdateQuantity(Math.max(1, quantity - 1))}
-                            className="p-2.5 hover:bg-white/10 rounded-xl text-red-500 transition-colors cursor-pointer"
+                            className="p-1.5 hover:bg-white/10 rounded-lg text-red-500 transition-colors cursor-pointer"
                           >
-                            <Minus className="w-4 h-4" />
+                            <Minus className="w-3.5 h-3.5" />
                           </button>
-                          <span className="w-8 text-center font-black text-lg text-white">{quantity}</span>
+                          <span className="w-6 text-center font-black text-sm text-white">{quantity}</span>
                           <button
                             type="button"
                             onClick={() => onUpdateQuantity(quantity + 1)}
-                            className="p-2.5 hover:bg-white/10 rounded-xl text-red-500 transition-colors cursor-pointer"
+                            className="p-1.5 hover:bg-white/10 rounded-lg text-red-500 transition-colors cursor-pointer"
                           >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between py-1 text-sm">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between py-1 text-xs">
                           <span className="text-gray-400">Unit Price</span>
                           <span className="font-bold text-white">₹{dish.price.toFixed(2)}</span>
                         </div>
-                        <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                          <span className="text-base font-bold text-gray-200">Total</span>
-                          <span className="text-3xl font-black text-red-500">₹{(dish.price * quantity).toFixed(2)}</span>
+                        <div className="flex items-center justify-between pt-2.5 border-t border-white/10">
+                          <span className="text-sm font-bold text-gray-200">Total</span>
+                          <span className="text-xl font-black text-red-500">₹{(dish.price * quantity).toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
@@ -495,20 +495,20 @@ export default function CartModal({
 
             {/* Footer */}
             {activeTab === 'selection' && dish && (
-              <div className="p-5 sm:p-6 bg-black/40 border-t border-white/10">
+              <div className="p-4 bg-black/40 border-t border-white/10">
                 {dish.available === false ? (
-                  <div className="w-full bg-neutral-800 text-gray-400 py-3.5 px-4 rounded-2xl font-bold text-center text-sm border border-red-500/30">
-                    <span className="text-red-400 font-black uppercase tracking-wider block mb-1">Currently Sold Out</span>
+                  <div className="w-full bg-neutral-800 text-gray-400 py-2.5 px-3 rounded-xl font-bold text-center text-xs border border-red-500/30">
+                    <span className="text-red-400 font-black uppercase tracking-wider block mb-0.5">Currently Sold Out</span>
                     This dish is temporarily unavailable.
                   </div>
                 ) : (
                   <button
                     type="button"
                     onClick={onProceedToCheckout}
-                    className="w-full bg-red-600 text-white py-4 sm:py-4.5 rounded-2xl font-black text-base sm:text-lg flex items-center justify-center gap-3 hover:bg-red-700 transition-all shadow-xl shadow-red-900/40 active:scale-95 cursor-pointer"
+                    className="w-full bg-red-600 text-white py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-900/40 active:scale-95 cursor-pointer"
                   >
-                    <span>Proceed to Checkout</span>
-                    <ArrowRight className="w-5 h-5" />
+                    <span>Proceed to Order</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 )}
               </div>
