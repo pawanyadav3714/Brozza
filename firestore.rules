@@ -54,5 +54,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    // Connectivity verification
+    match /test/{testId} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }

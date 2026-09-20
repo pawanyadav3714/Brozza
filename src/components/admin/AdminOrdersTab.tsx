@@ -299,7 +299,7 @@ export default function AdminOrdersTab({
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                             : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                         }`}>
-                          {order.paymentMethod === 'razorpay' ? 'Razorpay Online' : order.paymentMethod === 'cod' ? 'Cash On Delivery' : order.paymentMethod === 'qr' ? 'UPI QR' : 'Online'}
+                          {order.paymentMethod === 'razorpay' ? 'UPI' : order.paymentMethod === 'cod' ? 'Cash On Delivery (COD)' : order.paymentMethod === 'qr' ? 'UPI QR' : 'UPI'}
                         </span>
                         {order.paymentId && (
                           <span className="font-mono text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/10" title="Razorpay Payment ID">

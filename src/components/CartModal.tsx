@@ -8,11 +8,36 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Minus, ArrowRight, ShoppingBag, Clock, CheckCircle2, 
   Copy, ShieldCheck, Sparkles, AlertCircle, RefreshCw, ChevronRight,
-  Package
+  Package, Wallet, QrCode
 } from 'lucide-react';
 import { Dish, Order, PipelineStage } from '../types';
 import ParcelPipelineTracker, { normalizePipelineStage } from './ParcelPipelineTracker';
 import { useFirebase } from './FirebaseProvider';
+
+function getOrderPaymentBadge(order: Order) {
+  const method = order.paymentMethod?.toLowerCase() || 
+    (order.deliveryNotes?.toLowerCase().includes('cod') ? 'cod' : 
+     order.deliveryNotes?.toLowerCase().includes('razorpay') || order.deliveryNotes?.toLowerCase().includes('qr') ? 'upi' : 
+     order.paymentStatus === 'paid' ? 'upi' : 'cod');
+
+  const isUpi = method === 'razorpay' || method === 'qr' || method === 'upi';
+
+  if (isUpi) {
+    return (
+      <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 shadow-sm">
+        <QrCode className="w-3 h-3 text-emerald-400 shrink-0" />
+        <span>UPI</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-1.5 shadow-sm">
+      <Wallet className="w-3 h-3 text-amber-400 shrink-0" />
+      <span>COD</span>
+    </span>
+  );
+}
 
 interface CartModalProps {
   isOpen: boolean;
@@ -255,28 +280,9 @@ export default function CartModal({
                               </span>
                             </div>
 
-                            {/* Small Status Badge with Dynamic Color & Blinking */}
+                            {/* Payment Method Badge (COD or UPI) */}
                             <div className="shrink-0">
-                              {isPending && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-red-500/20 border border-red-500/40 text-red-300 flex items-center gap-1.5 shadow-sm">
-                                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.9)] shrink-0" />
-                                  Pending
-                                </span>
-                              )}
-
-                              {isAcceptedOrProgress && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 shadow-sm">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.9)] shrink-0" />
-                                  {stage === 'Received' ? 'Accepted' : stage}
-                                </span>
-                              )}
-
-                              {isDelivered && (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-emerald-600 border border-emerald-400 text-white flex items-center gap-1.5 shadow-md">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
-                                  Delivered
-                                </span>
-                              )}
+                              {getOrderPaymentBadge(order)}
                             </div>
                           </div>
 
@@ -382,16 +388,16 @@ export default function CartModal({
                               </span>
                             </div>
 
-                            <div className="shrink-0">
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              {getOrderPaymentBadge(order)}
                               {isDelivered ? (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600 border border-emerald-400 text-white flex items-center gap-1.5 shadow-md">
-                                  <CheckCircle2 className="w-3 h-3 text-white shrink-0" />
-                                  Delivered & Archived
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-600/80 text-white flex items-center gap-1">
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-white shrink-0" />
+                                  Archived
                                 </span>
                               ) : (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                                  Received Archive
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 flex items-center gap-1">
+                                  Received
                                 </span>
                               )}
                             </div>

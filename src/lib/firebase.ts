@@ -7,7 +7,7 @@ import {
   inMemoryPersistence, 
   browserPopupRedirectResolver 
 } from 'firebase/auth';
-import { getFirestore, initializeFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -27,11 +27,28 @@ const dbId = rawDbId && rawDbId !== '(default)' && rawDbId !== '' ? rawDbId : un
 
 let dbInstance;
 try {
+  const firestoreSettings = {
+    experimentalAutoDetectLongPolling: true,
+    ignoreUndefinedProperties: true,
+  };
   dbInstance = dbId
-    ? initializeFirestore(app, { experimentalForceLongPolling: true }, dbId)
-    : initializeFirestore(app, { experimentalForceLongPolling: true });
+    ? initializeFirestore(app, firestoreSettings, dbId)
+    : initializeFirestore(app, firestoreSettings);
 } catch {
   dbInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+}
+
+// Validate connection non-intrusively as per Firebase integration guidelines
+if (typeof window !== 'undefined') {
+  (async () => {
+    try {
+      await getDocFromServer(doc(dbInstance, 'test', 'connection'));
+    } catch (error: any) {
+      if (error?.message && error.message.includes('the client is offline')) {
+        console.warn('Firestore offline notice: Local cache active.');
+      }
+    }
+  })();
 }
 
 export const auth = authInstance;
