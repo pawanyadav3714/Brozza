@@ -45,7 +45,10 @@ declare global {
 
 // Razorpay Live Key ID
 export const RAZORPAY_KEY_ID =
-  (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_live_TbFK0M49FcyZj7';
+  (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_live_TeMHfOItsnQoDS';
+
+// Razorpay Key Secret (Configured for webhook & signature verification reference)
+export const RAZORPAY_KEY_SECRET = 'J40xvVKF1sQkqXs3UB5p54dH';
 
 export function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
