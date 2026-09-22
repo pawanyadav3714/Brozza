@@ -7,8 +7,19 @@ import {
   inMemoryPersistence, 
   browserPopupRedirectResolver 
 } from 'firebase/auth';
-import { getFirestore, initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  doc, 
+  getDocFromServer,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  setLogLevel
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Suppress internal Firestore connection timeout notices (harmless in offline/sandboxed previews)
+setLogLevel('error');
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
@@ -27,7 +38,10 @@ const dbId = rawDbId && rawDbId !== '(default)' && rawDbId !== '' ? rawDbId : un
 
 let dbInstance;
 try {
-  const firestoreSettings = {
+  const firestoreSettings: any = {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
     experimentalAutoDetectLongPolling: true,
     ignoreUndefinedProperties: true,
   };

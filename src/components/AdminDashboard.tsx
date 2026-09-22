@@ -19,12 +19,14 @@ import {
   LogIn, 
   ShieldCheck, 
   AlertTriangle,
-  Sparkles
+  Sparkles,
+  Key
 } from 'lucide-react';
 import AdminOverviewTab from './admin/AdminOverviewTab';
 import AdminOrdersTab from './admin/AdminOrdersTab';
 import AdminMenuTab from './admin/AdminMenuTab';
 import AdminInventoryTab from './admin/AdminInventoryTab';
+import AdminGatewayTab from './admin/AdminGatewayTab';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -258,6 +260,20 @@ export default function AdminDashboard({
               </span>
             )}
           </button>
+
+          {/* Tab 5: Payment Gateway API Settings */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('gateway')}
+            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'gateway'
+                ? 'bg-red-600 text-white shadow-lg shadow-red-900/40'
+                : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/5'
+            }`}
+          >
+            <Key className="w-4 h-4" />
+            <span>Payment API</span>
+          </button>
         </div>
 
         {/* Tab Page Content */}
@@ -308,6 +324,10 @@ export default function AdminDashboard({
                 onAdjustStock={onAdjustInventoryStock}
                 onResetInventory={onResetInventory}
               />
+            )}
+
+            {activeTab === 'gateway' && (
+              <AdminGatewayTab />
             )}
           </motion.div>
         </AnimatePresence>

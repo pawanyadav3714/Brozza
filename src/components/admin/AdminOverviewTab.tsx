@@ -15,7 +15,8 @@ import {
   ChefHat, 
   CheckCircle2, 
   TrendingUp,
-  Package
+  Package,
+  Key
 } from 'lucide-react';
 import { Dish, Order, InventoryItem, AdminTab } from '../../types';
 
@@ -179,7 +180,7 @@ export default function AdminOverviewTab({
       </div>
 
       {/* Quick Ops Jump Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Card 1: Orders */}
         <div 
           onClick={() => onSelectTab('orders')}
@@ -242,6 +243,28 @@ export default function AdminOverviewTab({
           </div>
           <div className="flex items-center justify-between text-xs font-black text-amber-400 uppercase tracking-wider pt-4 border-t border-white/5">
             <span>{inventory.length} Stock Supplies</span>
+            <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+          </div>
+        </div>
+
+        {/* Card 4: Payment Gateway API */}
+        <div 
+          onClick={() => onSelectTab('gateway')}
+          className="p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-emerald-500/40 hover:bg-white/10 transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center mb-4 group-hover:rotate-6 transition-transform">
+              <Key className="w-6 h-6" />
+            </div>
+            <h4 className="text-xl font-bold text-white mb-2 group-hover:text-emerald-400 transition-colors">
+              Payment Gateway API
+            </h4>
+            <p className="text-gray-400 text-xs leading-relaxed font-medium mb-4">
+              Configure Razorpay API Key ID, Key Secret, test/live mode status, and credentials placeholders.
+            </p>
+          </div>
+          <div className="flex items-center justify-between text-xs font-black text-emerald-400 uppercase tracking-wider pt-4 border-t border-white/5">
+            <span>API & Credentials</span>
             <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
           </div>
         </div>

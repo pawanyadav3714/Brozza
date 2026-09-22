@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CreditCard, Wallet, QrCode, CheckCircle2, ArrowLeft, Loader2, LogIn, ShieldCheck, Zap } from 'lucide-react';
 import { useFirebase } from './FirebaseProvider';
 import { UserAddress } from '../types';
-import { RAZORPAY_KEY_ID, loadRazorpayScript } from '../lib/razorpay';
+import { getRazorpayKeyId, loadRazorpayScript } from '../lib/razorpay';
 
 interface PaymentStepProps {
   onBack: () => void;
@@ -37,8 +37,9 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
     }
 
     try {
+      const activeKeyId = getRazorpayKeyId();
       const options = {
-        key: RAZORPAY_KEY_ID,
+        key: activeKeyId,
         amount: Math.round(totalPrice * 100), // in paise
         currency: 'INR',
         name: 'The Barozza Cafe',
@@ -56,7 +57,7 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
         notes: {
           address: userAddress?.address || '',
           cafe: 'The Barozza Cafe',
-          environment: 'Live Production',
+          environment: activeKeyId.startsWith('rzp_test') ? 'Test Sandbox' : 'Live Production',
         },
         modal: {
           ondismiss: () => {

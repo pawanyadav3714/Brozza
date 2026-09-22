@@ -43,12 +43,73 @@ declare global {
   }
 }
 
-// Razorpay Live Key ID
-export const RAZORPAY_KEY_ID =
-  (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_live_TeMHfOItsnQoDS';
+// Standard Placeholders for Razorpay Gateway
+export const RAZORPAY_KEY_ID_PLACEHOLDER = 'rzp_test_YourKeyIdHere or rzp_live_YourKeyIdHere';
+export const RAZORPAY_KEY_SECRET_PLACEHOLDER = 'YourRazorpayKeySecretHere';
 
-// Razorpay Key Secret (Configured for webhook & signature verification reference)
-export const RAZORPAY_KEY_SECRET = 'J40xvVKF1sQkqXs3UB5p54dH';
+// Default / fallback keys
+export const DEFAULT_RAZORPAY_KEY_ID =
+  (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_live_TeMHfOItsnQoDS';
+export const DEFAULT_RAZORPAY_KEY_SECRET =
+  (import.meta.env.VITE_RAZORPAY_KEY_SECRET as string) || 'J40xvVKF1sQkqXs3UB5p54dH';
+
+const STORAGE_KEY_ID = 'barozza_custom_razorpay_key_id';
+const STORAGE_KEY_SECRET = 'barozza_custom_razorpay_key_secret';
+
+export function getRazorpayKeyId(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem(STORAGE_KEY_ID);
+    if (custom && custom.trim()) return custom.trim();
+  }
+  return DEFAULT_RAZORPAY_KEY_ID;
+}
+
+export function getRazorpayKeySecret(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem(STORAGE_KEY_SECRET);
+    if (custom && custom.trim()) return custom.trim();
+  }
+  return DEFAULT_RAZORPAY_KEY_SECRET;
+}
+
+export function setCustomRazorpayCredentials(keyId: string, keySecret: string): void {
+  if (typeof window !== 'undefined') {
+    if (keyId.trim()) {
+      localStorage.setItem(STORAGE_KEY_ID, keyId.trim());
+    } else {
+      localStorage.removeItem(STORAGE_KEY_ID);
+    }
+    if (keySecret.trim()) {
+      localStorage.setItem(STORAGE_KEY_SECRET, keySecret.trim());
+    } else {
+      localStorage.removeItem(STORAGE_KEY_SECRET);
+    }
+  }
+}
+
+export function resetCustomRazorpayCredentials(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY_ID);
+    localStorage.removeItem(STORAGE_KEY_SECRET);
+  }
+}
+
+export function getStoredCustomCredentials(): { keyId: string; keySecret: string; hasCustom: boolean } {
+  if (typeof window !== 'undefined') {
+    const keyId = localStorage.getItem(STORAGE_KEY_ID) || '';
+    const keySecret = localStorage.getItem(STORAGE_KEY_SECRET) || '';
+    return {
+      keyId,
+      keySecret,
+      hasCustom: Boolean(keyId || keySecret),
+    };
+  }
+  return { keyId: '', keySecret: '', hasCustom: false };
+}
+
+// Deprecated export maintained for backward compatibility
+export const RAZORPAY_KEY_ID = getRazorpayKeyId();
+export const RAZORPAY_KEY_SECRET = getRazorpayKeySecret();
 
 export function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {

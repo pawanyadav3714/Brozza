@@ -18,11 +18,13 @@ import {
   ArrowRight,
   Sliders,
   Copy,
-  Clock
+  Clock,
+  Key
 } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order } from '../types';
+import { getRazorpayKeyId } from '../lib/razorpay';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 interface AdminSyncGatewayModalProps {
@@ -235,6 +237,40 @@ export default function AdminSyncGatewayModal({
                   <div>Project ID: <span className="text-white font-bold">{firebaseConfig.projectId}</span></div>
                   <div>Database ID: <span className="text-white font-bold">{(firebaseConfig as any).firestoreDatabaseId || '(default)'}</span></div>
                 </div>
+              </div>
+
+              {/* Payment API Gateway Status */}
+              <div className="p-4 rounded-2xl bg-black/40 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-white">Razorpay Payment API</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                        getRazorpayKeyId().startsWith('rzp_test') ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'
+                      }`}>
+                        {getRazorpayKeyId().startsWith('rzp_test') ? 'Test Sandbox' : 'Live Production'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-mono text-gray-400 truncate max-w-[280px]">
+                      Key ID: <span className="text-gray-200">{getRazorpayKeyId()}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenInternalAdmin();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-bold text-gray-200 hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer self-start sm:self-center"
+                >
+                  <Key className="w-3 h-3 text-emerald-400" />
+                  <span>Configure API Keys</span>
+                </button>
               </div>
 
               {/* Live Parcels Stream */}

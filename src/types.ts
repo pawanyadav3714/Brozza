@@ -95,7 +95,7 @@ export interface ParcelInfo {
   externalAdminUrl?: string;
 }
 
-export type AdminTab = 'overview' | 'orders' | 'menu' | 'inventory';
+export type AdminTab = 'overview' | 'orders' | 'menu' | 'inventory' | 'gateway';
 
 export interface InventoryItem {
   id: string;
