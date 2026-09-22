@@ -49,9 +49,9 @@ export const RAZORPAY_KEY_SECRET_PLACEHOLDER = 'YourRazorpayKeySecretHere';
 
 // Default / fallback keys
 export const DEFAULT_RAZORPAY_KEY_ID =
-  (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_live_TeMHfOItsnQoDS';
+  (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || 'rzp_live_TeyRNELrfR4056';
 export const DEFAULT_RAZORPAY_KEY_SECRET =
-  (import.meta.env.VITE_RAZORPAY_KEY_SECRET as string) || 'J40xvVKF1sQkqXs3UB5p54dH';
+  (import.meta.env.VITE_RAZORPAY_KEY_SECRET as string) || '67eRGkZC4X7ADxg3pVBWHlMn';
 
 const STORAGE_KEY_ID = 'barozza_custom_razorpay_key_id';
 const STORAGE_KEY_SECRET = 'barozza_custom_razorpay_key_secret';
