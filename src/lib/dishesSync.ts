@@ -47,13 +47,21 @@ export function mergeDishes(baseList: Dish[], ...overlays: Dish[][]): Dish[] {
 
   // 1. Seed base dishes
   for (const dish of baseList) {
-    dishMap.set(dish.id, dish);
+    if (dish && dish.id) {
+      dishMap.set(dish.id, dish);
+    }
   }
 
   // 2. Overlay incoming items
   for (const list of overlays) {
+    if (!Array.isArray(list)) continue;
     for (const item of list) {
       if (!item || !item.name) continue;
+      // Match by exact ID first
+      if (dishMap.has(item.id)) {
+        dishMap.set(item.id, { ...dishMap.get(item.id)!, ...item, id: item.id });
+        continue;
+      }
       // Also match by lowercase name to prevent duplicate entries with different ID schemes (e.g. 1 vs prod_1)
       const existingKey = Array.from(dishMap.keys()).find(
         (key) => dishMap.get(key)?.name.trim().toLowerCase() === item.name.trim().toLowerCase()

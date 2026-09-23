@@ -14,12 +14,13 @@ import {
   getDocFromServer,
   persistentLocalCache,
   persistentMultipleTabManager,
+  memoryLocalCache,
   setLogLevel
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-// Suppress internal Firestore connection timeout notices (harmless in offline/sandboxed previews)
-setLogLevel('error');
+// Silence internal Firestore connection timeout notices (harmless in offline/sandboxed previews)
+setLogLevel('silent');
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
@@ -33,38 +34,47 @@ try {
   authInstance = getAuth(app);
 }
 
-const rawDbId = (firebaseConfig as any).firestoreDatabaseId;
-const dbId = rawDbId && rawDbId !== '(default)' && rawDbId !== '' ? rawDbId : undefined;
+const dbId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
 
 let dbInstance;
 try {
-  const firestoreSettings: any = {
+  dbInstance = initializeFirestore(app, {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager(),
     }),
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
     ignoreUndefinedProperties: true,
-  };
-  dbInstance = dbId
-    ? initializeFirestore(app, firestoreSettings, dbId)
-    : initializeFirestore(app, firestoreSettings);
+  }, dbId);
 } catch {
-  dbInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  try {
+    dbInstance = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+      experimentalForceLongPolling: true,
+      ignoreUndefinedProperties: true,
+    }, dbId);
+  } catch {
+    dbInstance = getFirestore(app, dbId);
+  }
 }
 
 // Validate connection non-intrusively as per Firebase integration guidelines
 if (typeof window !== 'undefined') {
   (async () => {
     try {
-      await getDocFromServer(doc(dbInstance, 'test', 'connection'));
-    } catch (error: any) {
-      if (error?.message && error.message.includes('the client is offline')) {
-        console.warn('Firestore offline notice: Local cache active.');
-      }
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('the client is offline')), 2500)
+      );
+      await Promise.race([
+        getDocFromServer(doc(dbInstance, 'test', 'connection')),
+        timeoutPromise,
+      ]);
+    } catch {
+      // Local cache operates seamlessly if network backend is temporarily unreachable
     }
   })();
 }
 
 export const auth = authInstance;
 export const db = dbInstance;
+
 

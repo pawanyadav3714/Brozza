@@ -72,6 +72,9 @@ export interface Order {
   syncedToFirebase?: boolean;
   syncedAt?: any;
   externalAdminUrl?: string;
+  batchId?: string;
+  batchCount?: number;
+  batchTotal?: number;
 }
 
 export interface ParcelInfo {

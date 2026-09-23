@@ -10,7 +10,7 @@ export const DISHES: Dish[] = [
     id: '1',
     name: 'French Fries',
     price: 30,
-    image: '/images/unscriptedBanner.jpg',
+    image: '/images/frenchh.png',
     description: 'Crispy golden fries served hot and fresh.',
     category: 'Starters'
   },
@@ -144,10 +144,10 @@ export const DISHES: Dish[] = [
   },
   {
     id: '18',
-    name: 'Unscripted Special Banner Item',
+    name: 'Barozza Special Combo Platter',
     price: 120,
-    image: '/images/unscriptedBanner.jpg',
-    description: 'Featured house special creation displayed via unscripted banner.',
+    image: '/images/momos.png',
+    description: 'Chef special assortment of steamed momos, crispy bites and house dips.',
     category: 'Specials'
   }
 ];

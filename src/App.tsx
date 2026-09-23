@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, setDoc, serverTimestamp, doc, onSnapshot, query, orderBy, limit, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, serverTimestamp, doc, onSnapshot, query, orderBy, limit, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { subscribeToDishes, saveDishToFirestore, deleteDishFromFirestore } from './lib/dishesSync';
 import { useFirebase } from './components/FirebaseProvider';
@@ -18,10 +18,16 @@ import SuccessStep from './components/SuccessStep';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSyncGatewayModal from './components/AdminSyncGatewayModal';
 import ContactModal from './components/ContactModal';
-import { PhoneCall } from 'lucide-react';
+import { PhoneCall, Plus, Minus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { DISHES, INITIAL_INVENTORY } from './data';
-import { Dish, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage } from './types';
+import { Dish, CartItem, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage } from './types';
 import { normalizePipelineStage } from './components/ParcelPipelineTracker';
+import { 
+  RETENTION_PERIOD_MS, 
+  isRecordExpired, 
+  purgeExpiredLocalStorageOrders, 
+  purgeExpiredRecordsFromFirestore 
+} from './lib/retentionPolicy';
 
 const DEFAULT_DEMO_ORDERS: Order[] = [
   {
@@ -66,6 +72,29 @@ export default function App() {
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  
+  // Multi-item cart state for batch parcel ordering
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('barozza_cafe_cart');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.warn('Failed to parse cached cart:', e);
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('barozza_cafe_cart', JSON.stringify(cartItems));
+    } catch (e) {
+      console.warn('Failed to save cart to localStorage:', e);
+    }
+  }, [cartItems]);
+
   const [userAddress, setUserAddress] = useState<UserAddress | null>(null);
   const [orderStatus, setOrderStatus] = useState<OrderStatus>('idle');
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
@@ -76,18 +105,19 @@ export default function App() {
   const [maxPriceFilter, setMaxPriceFilter] = useState<number | null>(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
 
-  // Real-time live orders list with persistence and fallback
+  // Real-time live orders list with persistence and 2-day retention policy
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('barozza_cafe_orders');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {
-        console.warn('Failed to parse cached orders:', e);
-      }
+    const validCachedOrders = purgeExpiredLocalStorageOrders();
+    if (validCachedOrders.length > 0) {
+      const seen = new Set<string>();
+      return validCachedOrders.filter((o: any) => {
+        const key = o?.id || `${o?.parcelId || ''}-${o?.trackingNumber || ''}`;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
-    return DEFAULT_DEMO_ORDERS;
+    return DEFAULT_DEMO_ORDERS.filter((o) => !isRecordExpired(o, RETENTION_PERIOD_MS));
   });
 
   // Menu Catalog State with persistence
@@ -96,7 +126,16 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Clean any legacy placeholder banner references for dish item cards
+          return parsed.map((d: Dish) => {
+            if (d.image === '/images/unscriptedBanner.jpg') {
+              if (d.name?.toLowerCase().includes('fries')) return { ...d, image: '/images/frenchh.png' };
+              return { ...d, image: '/images/momos.png', name: d.name === 'Unscripted Special Banner Item' ? 'Barozza Special Combo Platter' : d.name };
+            }
+            return d;
+          });
+        }
       } catch (e) {
         console.warn('Failed to parse cached dishes:', e);
       }
@@ -206,26 +245,42 @@ export default function App() {
     localStorage.removeItem('barozza_cafe_inventory');
   };
 
-  // Real-time live orders tracking across the storefront (filtered by current user)
+  // Real-time live orders tracking across the storefront (filtered by current user & 2-day retention)
   useEffect(() => {
     const q = query(collection(db, 'orders'), limit(50));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        const seen = new Set<string>();
+        const expiredOrderIdsToDelete: string[] = [];
+        const expiredParcelIdsToDelete: string[] = [];
+
         const list = snapshot.docs
           .filter((docSnap) => {
             if (docSnap.id === 'barozza_menu_catalog' || docSnap.data().isCatalog) return false;
             const data = docSnap.data();
+
+            // 2-Day Retention Auto-Purge Check
+            if (isRecordExpired(data, RETENTION_PERIOD_MS)) {
+              expiredOrderIdsToDelete.push(docSnap.id);
+              if (data.parcelId) {
+                expiredParcelIdsToDelete.push(data.parcelId);
+              }
+              return false;
+            }
+
             if (user && data.userId && data.userId !== user.uid) {
               return false;
             }
+            if (seen.has(docSnap.id)) return false;
+            seen.add(docSnap.id);
             return true;
           })
           .map((docSnap) => {
             const data = docSnap.data();
             return {
-              id: docSnap.id,
               ...data,
+              id: docSnap.id,
               dishImage: data.dishImage || dishes.find((d) => d.id === data.dishId)?.image || '/images/frenchh.png',
             } as Order;
           })
@@ -234,6 +289,18 @@ export default function App() {
             const timeB = (b.createdAt as any)?.seconds || 0;
             return timeB - timeA;
           });
+
+        // Trigger immediate background deletion for any detected expired records
+        if (expiredOrderIdsToDelete.length > 0) {
+          expiredOrderIdsToDelete.forEach((ordId) => {
+            deleteDoc(doc(db, 'orders', ordId)).catch(() => {});
+          });
+        }
+        if (expiredParcelIdsToDelete.length > 0) {
+          expiredParcelIdsToDelete.forEach((prcId) => {
+            deleteDoc(doc(db, 'parcels', prcId)).catch(() => {});
+          });
+        }
 
         setOrders(list);
         try {
@@ -249,6 +316,21 @@ export default function App() {
 
     return () => unsubscribe();
   }, [dishes, user]);
+
+  // Automatic 2-Day Retention Database & Storage Purge Routine
+  useEffect(() => {
+    // Initial run on mount
+    purgeExpiredRecordsFromFirestore().catch((err) => {
+      console.warn('Initial 2-day database purge check notice:', err);
+    });
+
+    // Periodic sweep every 30 minutes
+    const purgeInterval = setInterval(() => {
+      purgeExpiredRecordsFromFirestore().catch(() => {});
+    }, 30 * 60 * 1000);
+
+    return () => clearInterval(purgeInterval);
+  }, []);
 
   // Real-time single active order tracking
   useEffect(() => {
@@ -298,9 +380,44 @@ export default function App() {
     }
   };
 
+  const handleAddToCart = (dish: Dish, qty: number = 1) => {
+    setCartItems((prev) => {
+      const existing = prev.find((item) => item.id === dish.id);
+      if (existing) {
+        return prev.map((item) =>
+          item.id === dish.id ? { ...item, quantity: item.quantity + qty } : item
+        );
+      }
+      return [...prev, { ...dish, quantity: qty }];
+    });
+  };
+
+  const handleUpdateCartQuantity = (dishId: string, newQty: number) => {
+    setCartItems((prev) => {
+      if (newQty <= 0) {
+        return prev.filter((item) => item.id !== dishId);
+      }
+      return prev.map((item) =>
+        item.id === dishId ? { ...item, quantity: newQty } : item
+      );
+    });
+  };
+
+  const handleRemoveFromCart = (dishId: string) => {
+    setCartItems((prev) => prev.filter((item) => item.id !== dishId));
+  };
+
+  const handleClearCart = () => {
+    setCartItems([]);
+  };
+
+  const totalCartItemsCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const totalCartPrice = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
   const handleDishSelect = (dish: Dish) => {
     setSelectedDish(dish);
     setQuantity(1);
+    handleAddToCart(dish, 1);
     setIsCartOpen(true);
   };
 
@@ -315,95 +432,163 @@ export default function App() {
   };
 
   const handlePaymentConfirm = async (paymentInfo?: { method: 'cod' | 'qr' | 'razorpay'; paymentId?: string }) => {
-    if (!selectedDish || !userAddress || !user) return;
+    if (!userAddress || !user) return;
 
-    // Generate unique parcel tracking identifiers
+    // Items to order: either all items in the cart or fallback to selectedDish
+    const itemsToOrder: CartItem[] = cartItems.length > 0
+      ? cartItems
+      : (selectedDish ? [{ ...selectedDish, quantity }] : []);
+
+    if (itemsToOrder.length === 0) return;
+
+    // Generate unique batch identifier for ordering all parcels at once
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const timeStampNum = Date.now().toString().slice(-6);
-    const parcelId = `PRCL-BRZ-${timeStampNum}-${randomSuffix}`;
-    const trackingNumber = `BRZTRK${timeStampNum}${randomSuffix}`;
-    const weightEstimate = `${(0.42 * quantity).toFixed(2)} kg`;
+    const batchId = `BATCH-BRZ-${timeStampNum}-${randomSuffix}`;
+    const batchTotal = itemsToOrder.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
     const chosenMethod = paymentInfo?.method || 'razorpay';
     const paymentId = paymentInfo?.paymentId || '';
     const paymentStatus = chosenMethod === 'cod' ? 'pending' : 'paid';
     setLastPaymentInfo({ method: chosenMethod, paymentId });
 
+    const newlyCreatedOrders: Order[] = [];
+    let firstParcelId = '';
+
     try {
-      const orderData = {
-        userId: user.uid,
-        dishId: selectedDish.id,
-        dishName: selectedDish.name,
-        dishImage: selectedDish.image,
-        quantity: quantity,
-        totalPrice: selectedDish.price * quantity,
-        status: 'Pending',
-        customerName: userAddress.name,
-        customerPhone: userAddress.phone,
-        customerAddress: userAddress.address,
-        paymentMethod: chosenMethod,
-        paymentId: paymentId,
-        paymentStatus: paymentStatus,
-        parcelId: parcelId,
-        trackingNumber: trackingNumber,
-        parcelType: 'Artisanal Cafe Fresh Food Express Parcel',
-        parcelWeight: weightEstimate,
-        parcelStatus: 'booked',
-        destinationLocation: userAddress.address,
-        deliveryNotes: `Dispatched via The Barozza Express Courier Fleet (${chosenMethod.toUpperCase()})`,
-        syncedToFirebase: true,
-        syncedAt: serverTimestamp(),
-        externalAdminUrl: 'https://brozza-admin.vercel.app/',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+      // Order all parcels at a time
+      for (let i = 0; i < itemsToOrder.length; i++) {
+        const item = itemsToOrder[i];
+        const itemRandom = Math.floor(1000 + Math.random() * 9000);
+        const parcelId = `PRCL-BRZ-${timeStampNum}-${itemRandom}`;
+        const trackingNumber = `BRZTRK${timeStampNum}${itemRandom}`;
+        const weightEstimate = `${(0.42 * item.quantity).toFixed(2)} kg`;
 
-      const docRef = await addDoc(collection(db, 'orders'), orderData);
-      setCurrentOrderId(docRef.id);
-      setCurrentParcelId(parcelId);
+        if (!firstParcelId) {
+          firstParcelId = parcelId;
+        }
 
-      // Prepend to local orders state immediately
-      const newLocalOrder: Order = {
-        id: docRef.id,
-        ...orderData,
-        status: 'Pending',
-        createdAt: { seconds: Math.floor(Date.now() / 1000) },
-        updatedAt: { seconds: Math.floor(Date.now() / 1000) },
-      } as Order;
-      setOrders((prev) => [newLocalOrder, ...prev]);
+        const orderData = {
+          userId: user.uid,
+          dishId: item.id,
+          dishName: item.name,
+          dishImage: item.image,
+          quantity: item.quantity,
+          totalPrice: item.price * item.quantity,
+          batchId: batchId,
+          batchCount: itemsToOrder.length,
+          batchTotal: batchTotal,
+          status: 'Pending',
+          customerName: userAddress.name,
+          customerPhone: userAddress.phone,
+          customerAddress: userAddress.address,
+          paymentMethod: chosenMethod,
+          paymentId: paymentId,
+          paymentStatus: paymentStatus,
+          parcelId: parcelId,
+          trackingNumber: trackingNumber,
+          parcelType: 'Artisanal Cafe Fresh Food Express Parcel',
+          parcelWeight: weightEstimate,
+          parcelStatus: 'booked',
+          destinationLocation: userAddress.address,
+          deliveryNotes: `Dispatched via The Barozza Express Courier Fleet (${chosenMethod.toUpperCase()}) [Parcel ${i + 1}/${itemsToOrder.length} • Batch ${batchId}]`,
+          syncedToFirebase: true,
+          syncedAt: serverTimestamp(),
+          externalAdminUrl: 'https://brozza-admin.vercel.app/',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
 
-      // Dual-sync to dedicated 'parcels' collection for admin applet
-      const parcelData = {
-        parcelId: parcelId,
-        orderId: docRef.id,
-        userId: user.uid,
-        recipientName: userAddress.name,
-        recipientPhone: userAddress.phone,
-        destination: userAddress.address,
-        parcelType: 'Artisanal Cafe Fresh Food Express Parcel',
-        parcelWeight: weightEstimate,
-        parcelStatus: 'booked',
-        itemsSummary: `${quantity}x ${selectedDish.name}`,
-        totalValue: selectedDish.price * quantity,
-        pickupLocation: 'The Barozza Cafe Kitchen Hub, GEC Palamu',
-        estimatedDeliveryMinutes: 30,
-        syncedToFirebase: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        externalAdminUrl: 'https://brozza-admin.vercel.app/',
-      };
+        const docRef = await addDoc(collection(db, 'orders'), orderData);
 
+        const newLocalOrder: Order = {
+          id: docRef.id,
+          ...orderData,
+          status: 'Pending',
+          createdAt: { seconds: Math.floor(Date.now() / 1000) },
+          updatedAt: { seconds: Math.floor(Date.now() / 1000) },
+        } as Order;
+        newlyCreatedOrders.push(newLocalOrder);
+
+        // Dual-sync to dedicated 'parcels' collection for admin applet
+        const parcelData = {
+          parcelId: parcelId,
+          orderId: docRef.id,
+          batchId: batchId,
+          userId: user.uid,
+          recipientName: userAddress.name,
+          recipientPhone: userAddress.phone,
+          destination: userAddress.address,
+          parcelType: 'Artisanal Cafe Fresh Food Express Parcel',
+          parcelWeight: weightEstimate,
+          parcelStatus: 'booked',
+          itemsSummary: `${item.quantity}x ${item.name}`,
+          totalValue: item.price * item.quantity,
+          pickupLocation: 'The Barozza Cafe Kitchen Hub, GEC Palamu',
+          estimatedDeliveryMinutes: 30,
+          syncedToFirebase: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          externalAdminUrl: 'https://brozza-admin.vercel.app/',
+        };
+
+        try {
+          await setDoc(doc(db, 'parcels', parcelId), parcelData);
+        } catch (parcelErr) {
+          console.warn('Parcels dual-sync notification:', parcelErr);
+        }
+      }
+
+      setCurrentOrderId(newlyCreatedOrders[0]?.id || null);
+      setCurrentParcelId(firstParcelId || batchId);
+
+      // Prepend to local orders state immediately, deduplicating against any live listener snapshot
+      setOrders((prev) => {
+        const map = new Map<string, Order>();
+        for (const o of newlyCreatedOrders) {
+          if (o.id) map.set(o.id, o);
+        }
+        for (const o of prev) {
+          if (o.id && !map.has(o.id)) {
+            map.set(o.id, o);
+          }
+        }
+        const updated = Array.from(map.values());
+        try {
+          localStorage.setItem('barozza_cafe_orders', JSON.stringify(updated));
+        } catch (e) {
+          // ignore
+        }
+        return updated;
+      });
+
+      // Clear the cart since all parcels have now been ordered
+      setCartItems([]);
       try {
-        await setDoc(doc(db, 'parcels', parcelId), parcelData);
-      } catch (parcelErr) {
-        console.warn('Parcels dual-sync notification:', parcelErr);
+        localStorage.removeItem('barozza_cafe_cart');
+      } catch (e) {
+        // ignore
       }
 
       setStep('success');
     } catch (error) {
-      console.error("Error creating order:", error);
-      setCurrentParcelId(parcelId);
-      // Fallback for demo if firebase isn't fully configured
+      console.error("Error creating batch orders:", error);
+      setCurrentParcelId(firstParcelId || batchId);
+      if (newlyCreatedOrders.length > 0) {
+        setOrders((prev) => {
+          const map = new Map<string, Order>();
+          for (const o of newlyCreatedOrders) {
+            if (o.id) map.set(o.id, o);
+          }
+          for (const o of prev) {
+            if (o.id && !map.has(o.id)) {
+              map.set(o.id, o);
+            }
+          }
+          return Array.from(map.values());
+        });
+      }
+      setCartItems([]);
       setStep('success');
       setOrderStatus('ordered');
     }
@@ -491,7 +676,7 @@ export default function App() {
       
       <div className="relative z-10">
         <Header 
-          cartCount={selectedDish ? 1 : 0} 
+          cartCount={totalCartItemsCount > 0 ? totalCartItemsCount : (selectedDish ? 1 : 0)} 
           onOpenCart={() => setIsCartOpen(true)}
           onOpenAdmin={() => setIsSyncModalOpen(true)}
           onBackToMenu={() => setStep('menu')}
@@ -500,7 +685,7 @@ export default function App() {
           orders={orders}
         />
 
-        <main className="pb-20">
+        <main className="pb-24">
           <AnimatePresence mode="wait">
             {step === 'menu' && (
               <motion.div
@@ -582,27 +767,51 @@ export default function App() {
                     </div>
                   </div>
 
-                  <DishCarousel dishes={displayedDishes} onSelectDish={handleDishSelect} />
+                  <DishCarousel 
+                    dishes={displayedDishes} 
+                    onSelectDish={handleDishSelect} 
+                    cartItems={cartItems}
+                    onAddToCart={(dish) => handleAddToCart(dish, 1)}
+                  />
 
                   <section className="mt-20">
-                    <h2 className="text-3xl font-black text-white mb-10 flex items-center gap-4">
-                      <span className="w-12 h-1 bg-red-500 rounded-full" />
-                      Popular Near You
-                    </h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
+                      <h2 className="text-3xl font-black text-white flex items-center gap-4">
+                        <span className="w-12 h-1 bg-red-500 rounded-full" />
+                        Popular Near You
+                      </h2>
+                      {totalCartItemsCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setIsCartOpen(true)}
+                          className="self-start sm:self-auto px-4 py-2 rounded-2xl bg-red-600/20 border border-red-500/40 text-red-300 text-xs font-black flex items-center gap-2 hover:bg-red-600 hover:text-white transition-all cursor-pointer"
+                        >
+                          <ShoppingBag className="w-4 h-4" />
+                          <span>{cartItems.length} Dishes ({totalCartItemsCount} portions) in Bag • ₹{totalCartPrice.toFixed(2)}</span>
+                        </button>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                      {displayedDishes.map((dish) => {
+                      {displayedDishes.map((dish, dishIdx) => {
                         const isAvailable = dish.available !== false;
+                        const inCartItem = cartItems.find((item) => item.id === dish.id);
+                        const inCartQty = inCartItem?.quantity || 0;
+
                         return (
                           <motion.div
-                            key={dish.id}
-                            whileHover={{ y: -10, scale: 1.02 }}
+                            key={`store-dish-${dish.id}-${dishIdx}`}
+                            whileHover={{ y: -6 }}
                             onClick={() => handleDishSelect(dish)}
-                            className={`backdrop-blur-xl rounded-[2.5rem] overflow-hidden border shadow-2xl transition-all cursor-pointer group ${
+                            className={`backdrop-blur-xl rounded-[2.5rem] overflow-hidden border shadow-2xl transition-all cursor-pointer group flex flex-col justify-between ${
                               isAvailable
-                                ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                                ? inCartQty > 0
+                                  ? 'bg-neutral-900/90 border-red-500/50 shadow-red-950/40'
+                                  : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
                                 : 'bg-neutral-950/70 border-red-500/20 opacity-80'
                             }`}
                           >
+                            {/* Dish Image Container */}
                             <div className="aspect-[4/3] overflow-hidden relative">
                               <img 
                                 src={dish.image} 
@@ -614,10 +823,18 @@ export default function App() {
                                   (e.target as HTMLImageElement).src = '/images/frenchh.png';
                                 }}
                               />
-                              <div className="absolute top-6 right-6 bg-red-500 px-4 py-1.5 rounded-full text-xs font-black text-white shadow-xl">
-                                4.5 ★
+                              <div className="absolute top-5 right-5 flex items-center gap-1.5">
+                                {inCartQty > 0 && (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xl flex items-center gap-1">
+                                    <ShoppingBag className="w-3 h-3" />
+                                    {inCartQty} in Bag
+                                  </span>
+                                )}
+                                <div className="bg-red-500 px-3.5 py-1 rounded-full text-xs font-black text-white shadow-xl">
+                                  4.5 ★
+                                </div>
                               </div>
-                              <div className="absolute top-6 left-6">
+                              <div className="absolute top-5 left-5">
                                 <span className="px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-black/60 backdrop-blur-md text-white border border-white/20">
                                   {dish.category || 'General'}
                                 </span>
@@ -630,20 +847,100 @@ export default function App() {
                                 </div>
                               )}
                             </div>
-                            <div className="p-8">
-                              <div className="flex justify-between items-start mb-3">
-                                <h3 className="text-2xl font-bold text-white group-hover:text-red-400 transition-colors">{dish.name}</h3>
-                                <span className="text-xl font-black text-red-500">₹{dish.price.toFixed(2)}</span>
+
+                            {/* Dish Details & Cart Button Container */}
+                            <div className="p-7 flex flex-col flex-1 justify-between">
+                              <div>
+                                <div className="flex justify-between items-start mb-2.5">
+                                  <h3 className="text-xl sm:text-2xl font-bold text-white group-hover:text-red-400 transition-colors leading-tight">
+                                    {dish.name}
+                                  </h3>
+                                  <span className="text-xl font-black text-red-500 shrink-0 ml-3">
+                                    ₹{dish.price.toFixed(2)}
+                                  </span>
+                                </div>
+                                <p className="text-gray-400 line-clamp-2 mb-5 font-medium text-xs sm:text-sm leading-relaxed">
+                                  {dish.description}
+                                </p>
+                                <div className="flex items-center justify-between pb-4 mb-4 border-t border-white/5 pt-3">
+                                  <div className="flex items-center gap-2 text-xs font-bold text-gray-300 uppercase tracking-widest">
+                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                    5-10 min
+                                  </div>
+                                  <div className="text-xs font-bold text-gray-300 uppercase tracking-widest">
+                                    {isAvailable ? 'Express Parcel' : 'Unavailable'}
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-gray-400 line-clamp-2 mb-6 font-medium leading-relaxed">{dish.description}</p>
-                              <div className="flex items-center justify-between pt-6 border-t border-white/5">
-                                <div className="flex items-center gap-2 text-xs font-bold text-gray-300 uppercase tracking-widest">
-                                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                                  5-10 min
-                                </div>
-                                <div className="text-xs font-bold text-gray-300 uppercase tracking-widest">
-                                  {isAvailable ? 'Free Delivery' : 'Unavailable'}
-                                </div>
+
+                              {/* Cart Action Buttons */}
+                              <div className="pt-1 mt-auto">
+                                {!isAvailable ? (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="w-full py-3 px-4 rounded-2xl bg-neutral-900 border border-white/10 text-gray-500 font-black text-xs uppercase tracking-wider text-center cursor-not-allowed"
+                                  >
+                                    Currently Sold Out
+                                  </button>
+                                ) : inCartQty === 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddToCart(dish, 1);
+                                    }}
+                                    className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-950/40 hover:shadow-red-900/60 active:scale-95 transition-all cursor-pointer group/btn"
+                                  >
+                                    <Plus className="w-4 h-4 transition-transform group-hover/btn:rotate-90 duration-300" />
+                                    <span>Add to Cart</span>
+                                  </button>
+                                ) : (
+                                  <div 
+                                    onClick={(e) => e.stopPropagation()} 
+                                    className="flex items-center justify-between gap-2 bg-red-950/30 border border-red-500/40 rounded-2xl p-1.5 shadow-inner"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsCartOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 pl-3 hover:text-red-400 transition-colors cursor-pointer min-w-0"
+                                      title="Open Bag & Review Parcels"
+                                    >
+                                      <ShoppingBag className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                      <span className="text-xs font-black text-white truncate">{inCartQty} in Bag</span>
+                                    </button>
+                                    <div className="flex items-center gap-1.5 bg-neutral-900/90 rounded-xl p-1 border border-white/10 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateCartQuantity(dish.id, inCartQty - 1);
+                                        }}
+                                        className="p-1.5 hover:bg-white/10 rounded-lg text-red-400 hover:text-white transition-colors cursor-pointer"
+                                        title={inCartQty <= 1 ? "Remove from bag" : "Decrease quantity"}
+                                      >
+                                        {inCartQty <= 1 ? <Trash2 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+                                      </button>
+                                      <span className="w-5 text-center font-black text-xs text-white">
+                                        {inCartQty}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateCartQuantity(dish.id, inCartQty + 1);
+                                        }}
+                                        className="p-1.5 hover:bg-white/10 rounded-lg text-emerald-400 hover:text-white transition-colors cursor-pointer"
+                                        title="Increase quantity"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </motion.div>
@@ -677,10 +974,11 @@ export default function App() {
                 exit={{ opacity: 0, x: -20 }}
               >
                 <PaymentStep 
-                  totalPrice={totalPrice}
+                  totalPrice={cartItems.length > 0 ? totalCartPrice : totalPrice}
                   userAddress={userAddress}
-                  dishName={selectedDish?.name}
-                  quantity={quantity}
+                  dishName={cartItems.length === 1 ? cartItems[0].name : (selectedDish?.name)}
+                  quantity={cartItems.length === 1 ? cartItems[0].quantity : quantity}
+                  cartItems={cartItems.length > 0 ? cartItems : (selectedDish ? [{ ...selectedDish, quantity }] : [])}
                   onBack={() => setStep('checkout')} 
                   onConfirm={handlePaymentConfirm} 
                 />
@@ -707,18 +1005,74 @@ export default function App() {
         </main>
       </div>
 
+      {/* Floating Bottom Cart Bar for Multi-Dish Selection */}
+      <AnimatePresence>
+        {step === 'menu' && totalCartItemsCount > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-lg bg-neutral-900/95 backdrop-blur-2xl border border-red-500/40 rounded-2xl sm:rounded-full p-2.5 sm:px-5 sm:py-3 shadow-2xl shadow-red-950/80 flex items-center justify-between gap-3 text-white"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative p-2 rounded-xl bg-red-600 text-white shrink-0 shadow-md shadow-red-950/60">
+                <ShoppingBag className="w-5 h-5" />
+                <span className="absolute -top-1.5 -right-1.5 bg-white text-red-600 font-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center shadow">
+                  {totalCartItemsCount}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black text-white truncate">
+                  {cartItems.length} {cartItems.length === 1 ? 'Dish' : 'Dishes'} ({totalCartItemsCount} {totalCartItemsCount === 1 ? 'item' : 'items'})
+                </div>
+                <div className="text-[11px] font-bold text-red-400">
+                  ₹{totalCartPrice.toFixed(2)} • {cartItems.length} Express {cartItems.length === 1 ? 'Parcel' : 'Parcels'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition-all cursor-pointer"
+              >
+                View Bag
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleProceedToCheckout();
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-xs font-black flex items-center gap-1.5 shadow-lg shadow-red-900/50 active:scale-95 transition-all cursor-pointer"
+              >
+                <span>Order All Parcels</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <CartModal
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         dish={selectedDish}
         quantity={quantity}
         onUpdateQuantity={setQuantity}
+        cartItems={cartItems}
+        onUpdateCartQuantity={handleUpdateCartQuantity}
+        onRemoveFromCart={handleRemoveFromCart}
+        onClearCart={handleClearCart}
         onProceedToCheckout={handleProceedToCheckout}
         orders={orders}
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onSelectDishForNewOrder={() => {
-          setSelectedDish(dishes[0]);
-          setIsCartOpen(true);
+          setIsCartOpen(false);
+        }}
+        onPurgeExpired={async () => {
+          await purgeExpiredRecordsFromFirestore();
+          const valid = purgeExpiredLocalStorageOrders();
+          setOrders(valid);
         }}
       />
 

@@ -27,6 +27,7 @@ import AdminOrdersTab from './admin/AdminOrdersTab';
 import AdminMenuTab from './admin/AdminMenuTab';
 import AdminInventoryTab from './admin/AdminInventoryTab';
 import AdminGatewayTab from './admin/AdminGatewayTab';
+import { isRecordExpired, RETENTION_PERIOD_MS } from '../lib/retentionPolicy';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -77,10 +78,22 @@ export default function AdminDashboard({
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const ordersData = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        })) as Order[];
+        const seen = new Set<string>();
+        const ordersData = snapshot.docs
+          .filter((d) => {
+            const data = d.data();
+            if (isRecordExpired(data, RETENTION_PERIOD_MS)) {
+              deleteDoc(doc(db, 'orders', d.id)).catch(() => {});
+              return false;
+            }
+            if (seen.has(d.id)) return false;
+            seen.add(d.id);
+            return true;
+          })
+          .map((d) => ({
+            ...d.data(),
+            id: d.id,
+          })) as Order[];
         setOrders(ordersData);
         setLoading(false);
       },

@@ -5,9 +5,9 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CreditCard, Wallet, QrCode, CheckCircle2, ArrowLeft, Loader2, LogIn, ShieldCheck, Zap } from 'lucide-react';
+import { CreditCard, Wallet, QrCode, CheckCircle2, ArrowLeft, Loader2, LogIn, ShieldCheck, Zap, Package } from 'lucide-react';
 import { useFirebase } from './FirebaseProvider';
-import { UserAddress } from '../types';
+import { UserAddress, CartItem } from '../types';
 import { getRazorpayKeyId, loadRazorpayScript } from '../lib/razorpay';
 
 interface PaymentStepProps {
@@ -17,13 +17,21 @@ interface PaymentStepProps {
   userAddress?: UserAddress | null;
   dishName?: string;
   quantity?: number;
+  cartItems?: CartItem[];
 }
 
-export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress, dishName, quantity = 1 }: PaymentStepProps) {
+export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress, dishName, quantity = 1, cartItems = [] }: PaymentStepProps) {
   const { user, signInWithGoogle, isSigningIn } = useFirebase();
   const [method, setMethod] = useState<'razorpay' | 'cod'>('razorpay');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const effectiveItems: CartItem[] = (cartItems && cartItems.length > 0)
+    ? cartItems
+    : dishName
+    ? [{ id: 'd-single', name: dishName, price: totalPrice / (quantity || 1), quantity: quantity || 1, image: '/images/frenchh.png' } as any]
+    : [];
+  const totalItemsCount = effectiveItems.reduce((acc, item) => acc + item.quantity, 0);
 
   const triggerRazorpayPayment = async () => {
     setErrorMessage(null);
@@ -43,7 +51,9 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
         amount: Math.round(totalPrice * 100), // in paise
         currency: 'INR',
         name: 'The Barozza Cafe',
-        description: dishName ? `${dishName} (x${quantity}) - Fresh Cafe Order` : 'Artisanal Cafe Order Payment',
+        description: effectiveItems.length > 1
+          ? `${effectiveItems.length} Dishes (${totalItemsCount} Parcels) - The Barozza Cafe`
+          : (dishName ? `${dishName} (x${quantity}) - Fresh Cafe Order` : 'Artisanal Cafe Order Payment'),
         image: '/images/frenchh.png',
         prefill: {
           name: userAddress?.name || user?.displayName || '',
@@ -57,6 +67,7 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
         notes: {
           address: userAddress?.address || '',
           cafe: 'The Barozza Cafe',
+          parcelsCount: effectiveItems.length.toString(),
           environment: activeKeyId.startsWith('rzp_test') ? 'Test Sandbox' : 'Live Production',
         },
         modal: {
@@ -149,6 +160,41 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
             </div>
           )}
 
+          {/* Multi-Parcel Order Summary */}
+          {effectiveItems.length > 0 && (
+            <div className="mb-6 p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-red-500" />
+                  <span className="text-xs font-black uppercase tracking-wider text-gray-200">
+                    Order Manifest ({effectiveItems.length} {effectiveItems.length === 1 ? 'Parcel' : 'Parcels'})
+                  </span>
+                </div>
+                <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  {totalItemsCount} {totalItemsCount === 1 ? 'Portion' : 'Portions'} Total
+                </span>
+              </div>
+              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                {effectiveItems.map((item, idx) => (
+                  <div key={item.id || idx} className="flex items-center justify-between text-xs py-0.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {item.image && (
+                        <img src={item.image} alt={item.name} className="w-7 h-7 rounded-lg object-cover shrink-0 border border-white/10" />
+                      )}
+                      <span className="text-white font-medium truncate">{item.name}</span>
+                      <span className="text-gray-400 shrink-0 font-bold">×{item.quantity}</span>
+                    </div>
+                    <span className="font-bold text-gray-200 shrink-0 ml-2">₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-2 border-t border-white/10 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-400">Total Payable ({effectiveItems.length} {effectiveItems.length === 1 ? 'Parcel' : 'Parcels'})</span>
+                <span className="text-base font-black text-red-400">₹{totalPrice.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3 mb-6">
             {/* UPI & Online Payment Option */}
             <motion.button
@@ -218,9 +264,9 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
             ) : (
               <>
                 {method === 'razorpay' ? (
-                  `Pay ₹${totalPrice.toFixed(2)} with UPI`
+                  `Pay ₹${totalPrice.toFixed(2)} with UPI (${effectiveItems.length} ${effectiveItems.length === 1 ? 'Parcel' : 'Parcels'})`
                 ) : (
-                  'Place Order (Cash on Delivery)'
+                  `Order All ${effectiveItems.length} ${effectiveItems.length === 1 ? 'Parcel' : 'Parcels'} (Cash on Delivery)`
                 )}
                 <ArrowLeft className="w-5 h-5 rotate-180" />
               </>

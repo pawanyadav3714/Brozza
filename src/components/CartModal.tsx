@@ -8,11 +8,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Minus, ArrowRight, ShoppingBag, Clock, CheckCircle2, 
   Copy, ShieldCheck, Sparkles, AlertCircle, RefreshCw, ChevronRight,
-  Package, Wallet, QrCode
+  Package, Wallet, QrCode, Trash2
 } from 'lucide-react';
-import { Dish, Order, PipelineStage } from '../types';
+import { Dish, Order, PipelineStage, CartItem } from '../types';
 import ParcelPipelineTracker, { normalizePipelineStage } from './ParcelPipelineTracker';
 import { useFirebase } from './FirebaseProvider';
+import { 
+  RETENTION_PERIOD_MS, 
+  isRecordExpired, 
+  purgeExpiredRecordsFromFirestore 
+} from '../lib/retentionPolicy';
 
 function getOrderPaymentBadge(order: Order) {
   const method = order.paymentMethod?.toLowerCase() || 
@@ -42,38 +47,61 @@ function getOrderPaymentBadge(order: Order) {
 interface CartModalProps {
   isOpen: boolean;
   onClose: () => void;
-  dish: Dish | null;
-  quantity: number;
-  onUpdateQuantity: (q: number) => void;
+  dish?: Dish | null;
+  quantity?: number;
+  onUpdateQuantity?: (q: number) => void;
+  cartItems?: CartItem[];
+  onUpdateCartQuantity?: (dishId: string, q: number) => void;
+  onRemoveFromCart?: (dishId: string) => void;
+  onClearCart?: () => void;
   onProceedToCheckout: () => void;
   orders?: Order[];
   onUpdateOrderStatus?: (orderId: string, newStage: PipelineStage) => Promise<void> | void;
   onSelectDishForNewOrder?: () => void;
+  onPurgeExpired?: () => Promise<void> | void;
 }
 
 export default function CartModal({
   isOpen,
   onClose,
   dish,
-  quantity,
+  quantity = 1,
   onUpdateQuantity,
+  cartItems = [],
+  onUpdateCartQuantity,
+  onRemoveFromCart,
+  onClearCart,
   onProceedToCheckout,
   orders = [],
   onUpdateOrderStatus,
-  onSelectDishForNewOrder
+  onSelectDishForNewOrder,
+  onPurgeExpired
 }: CartModalProps) {
   const { user } = useFirebase();
-  const [activeTab, setActiveTab] = useState<'orders' | 'drafts' | 'selection'>('orders');
+
+  const effectiveItems: CartItem[] = (cartItems && cartItems.length > 0)
+    ? cartItems
+    : dish
+    ? [{ ...dish, quantity: quantity || 1 }]
+    : [];
+
+  const totalCartCount = effectiveItems.reduce((acc, item) => acc + item.quantity, 0);
+  const totalCartPrice = effectiveItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const hasSoldOutItems = effectiveItems.some(item => item.available === false);
+
+  const [activeTab, setActiveTab] = useState<'cart' | 'orders' | 'drafts'>('cart');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeNotice, setPurgeNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (dish) {
-      setActiveTab('selection');
+    if (effectiveItems.length > 0) {
+      setActiveTab('cart');
     } else {
       setActiveTab('orders');
     }
-  }, [dish, isOpen]);
+  }, [isOpen, effectiveItems.length]);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -93,23 +121,35 @@ export default function CartModal({
     }
   };
 
+  const handleManualPurge = async () => {
+    setIsPurging(true);
+    try {
+      const res = await purgeExpiredRecordsFromFirestore();
+      if (onPurgeExpired) {
+        await onPurgeExpired();
+      }
+      setPurgeNotice(`Cleared expired data: ${res.deletedOrders} orders & ${res.deletedParcels} parcels removed.`);
+      setTimeout(() => setPurgeNotice(null), 4000);
+    } catch (err) {
+      setPurgeNotice('Purge complete.');
+      setTimeout(() => setPurgeNotice(null), 3000);
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   const activeOrdersCount = orders.filter(
     (o) => normalizePipelineStage(o.status) !== 'Delivered'
   ).length;
 
-  // 7-Day Draft Recycling Logic
-  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-  const now = Date.now();
-
+  // 2-Day Draft Retention Policy (48 Hours)
   const draftOrders = orders.filter((order) => {
     const stage = normalizePipelineStage(order.status);
     // Draft stores Received or Delivered parcels
     if (stage !== 'Received' && stage !== 'Delivered') return false;
 
-    // 7-day recycling check
-    const orderTime = order.createdAt?.seconds ? order.createdAt.seconds * 1000 : now;
-    const age = now - orderTime;
-    return age <= SEVEN_DAYS_MS;
+    // 2-day retention check
+    return !isRecordExpired(order, RETENTION_PERIOD_MS);
   });
 
   return (
@@ -168,7 +208,29 @@ export default function CartModal({
             </div>
 
             {/* Navigation Tabs (Mobile-responsive scrollable container) */}
+            {/* Tabs Header */}
             <div className="px-3 sm:px-5 pt-3 pb-2 border-b border-white/10 bg-neutral-900/50 flex items-center gap-2 overflow-x-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setActiveTab('cart')}
+                className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
+                  activeTab === 'cart'
+                    ? 'bg-red-600 text-white shadow-lg shadow-red-900/40'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4 shrink-0" />
+                <span>Bag & Parcels</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                  activeTab === 'cart' ? 'bg-white/20 text-white' : 'bg-white/10 text-gray-300'
+                }`}>
+                  {totalCartCount}
+                </span>
+                {totalCartCount > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse shrink-0" />
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setActiveTab('orders')}
@@ -191,38 +253,24 @@ export default function CartModal({
               </button>
 
               <button
+                id="cart-tab-drafts"
                 type="button"
                 onClick={() => setActiveTab('drafts')}
-                className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 border ${
                   activeTab === 'drafts'
-                    ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white border-amber-400/40 shadow-lg shadow-amber-950/60 ring-1 ring-amber-400/30'
+                    : 'text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10 border-amber-500/20'
                 }`}
+                title="Drafts and parcels auto-purge after 2 days"
               >
-                <Clock className="w-4 h-4 shrink-0" />
-                <span>Drafts (7d)</span>
+                <Clock className="w-4 h-4 shrink-0 text-amber-300" />
+                <span>Drafts (2d)</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                  activeTab === 'drafts' ? 'bg-white/20 text-white' : 'bg-white/10 text-gray-300'
+                  activeTab === 'drafts' ? 'bg-black/40 text-amber-200 border border-amber-300/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                 }`}>
                   {draftOrders.length}
                 </span>
               </button>
-
-              {dish && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('selection')}
-                  className={`py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
-                    activeTab === 'selection'
-                      ? 'bg-red-600 text-white shadow-lg shadow-red-900/40'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <ShoppingBag className="w-4 h-4 shrink-0" />
-                  <span>Item in Bag</span>
-                  <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse shrink-0" />
-                </button>
-              )}
             </div>
 
             {/* Body Content */}
@@ -251,7 +299,7 @@ export default function CartModal({
                       </button>
                     </div>
                   ) : (
-                    orders.map((order) => {
+                    orders.map((order, idx) => {
                       const stage = normalizePipelineStage(order.status);
                       const isPending = stage === 'Pending';
                       const isDelivered = stage === 'Delivered';
@@ -259,7 +307,7 @@ export default function CartModal({
 
                       return (
                         <motion.div
-                          key={order.id}
+                          key={`modal-order-${order.id || 'ord'}-${idx}`}
                           layout
                           initial={{ opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -340,34 +388,38 @@ export default function CartModal({
                   )}
                 </div>
               ) : activeTab === 'drafts' ? (
-                /* Drafts Tab (Received & Delivered parcels, 7-day retention) */
+                /* Drafts Tab (Received & Delivered parcels, 2-day retention) */
                 <div className="space-y-6">
-                  <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 text-xs text-amber-300/90 flex items-start gap-2.5">
-                    <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div className="leading-relaxed">
-                      <span className="font-bold text-white block mb-0.5">Draft Archive (7-Day Auto-Recycle):</span> 
-                      Stored here are all received and delivered parcels. Automatically recycled and purged after 7 days.
-                    </div>
-                  </div>
+                  {purgeNotice && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{purgeNotice}</span>
+                    </motion.div>
+                  )}
 
                   {draftOrders.length === 0 ? (
                     <div className="text-center py-16 px-4 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
                       <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400">
-                        <Clock className="w-8 h-8" />
+                        <Clock className="w-8 h-8 text-amber-400/60" />
                       </div>
                       <h3 className="text-lg font-black text-white">No Draft Parcels Found</h3>
                       <p className="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed">
-                        Parcels that have reached the Received or Delivered stage will appear in this draft archive for up to 7 days.
+                        Parcels that have reached the Received or Delivered stage will appear in this draft archive for up to 2 days before being automatically purged from the database and storage.
                       </p>
                     </div>
                   ) : (
-                    draftOrders.map((order) => {
+                    draftOrders.map((order, idx) => {
                       const stage = normalizePipelineStage(order.status);
                       const isDelivered = stage === 'Delivered';
 
                       return (
                         <motion.div
-                          key={order.id}
+                          key={`modal-draft-${order.id || 'draft'}-${idx}`}
                           layout
                           initial={{ opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -445,75 +497,173 @@ export default function CartModal({
                   )}
                 </div>
               ) : (
-                /* Item Selection in Bag */
-                dish && (
-                  <div className="space-y-6">
-                    <div className="flex flex-col gap-4">
-                      <img
-                        src={dish.image}
-                        alt={dish.name}
-                        className="w-full aspect-video rounded-3xl object-cover shadow-2xl border border-white/10"
-                      />
+                /* Item Selection in Bag / Multi-item Cart */
+                <div className="space-y-6">
+                  {effectiveItems.length === 0 ? (
+                    <div className="text-center py-16 px-4 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
+                      <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400">
+                        <ShoppingBag className="w-8 h-8" />
+                      </div>
                       <div>
-                        <span className="text-xs font-black text-red-500 uppercase tracking-widest">{dish.category}</span>
-                        <h3 className="text-2xl sm:text-3xl font-black text-white mt-1 tracking-tight">{dish.name}</h3>
-                        <p className="text-gray-400 mt-2 text-sm font-medium leading-relaxed">{dish.description}</p>
+                        <h4 className="text-base font-black text-white">Your Bag is Empty</h4>
+                        <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+                          Select multiple handcrafted dishes from the menu to order all parcels together at once!
+                        </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          if (onSelectDishForNewOrder) onSelectDishForNewOrder();
+                        }}
+                        className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                      >
+                        Browse Menu & Add Dishes
+                      </button>
                     </div>
-
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="font-bold text-gray-300 text-xs">Quantity</span>
-                        <div className="flex items-center gap-3 bg-black/50 rounded-xl p-1 border border-white/10">
-                          <button
-                            type="button"
-                            onClick={() => onUpdateQuantity(Math.max(1, quantity - 1))}
-                            className="p-1.5 hover:bg-white/10 rounded-lg text-red-500 transition-colors cursor-pointer"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="w-6 text-center font-black text-sm text-white">{quantity}</span>
-                          <button
-                            type="button"
-                            onClick={() => onUpdateQuantity(quantity + 1)}
-                            className="p-1.5 hover:bg-white/10 rounded-lg text-red-500 transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
+                  ) : (
+                    <>
+                      {/* Cart Header */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-black uppercase tracking-wider text-white">
+                            Selected Dishes ({effectiveItems.length} {effectiveItems.length === 1 ? 'Parcel' : 'Parcels'})
+                          </h4>
+                          <p className="text-[11px] text-gray-400">
+                            {totalCartCount} total {totalCartCount === 1 ? 'item' : 'items'} ready for express delivery
+                          </p>
                         </div>
+                        {onClearCart && (
+                          <button
+                            type="button"
+                            onClick={onClearCart}
+                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-white/10 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Clear Bag</span>
+                          </button>
+                        )}
                       </div>
 
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between py-1 text-xs">
-                          <span className="text-gray-400">Unit Price</span>
-                          <span className="font-bold text-white">₹{dish.price.toFixed(2)}</span>
+                      {/* Items List */}
+                      <div className="space-y-3">
+                        {effectiveItems.map((item, idx) => (
+                          <div 
+                            key={`cart-item-${item.id}-${idx}`}
+                            className="p-3.5 rounded-2xl bg-neutral-900/90 border border-white/10 hover:border-white/20 transition-all flex items-center justify-between gap-3 shadow-lg"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-16 h-16 rounded-xl object-cover shrink-0 border border-white/10"
+                              />
+                              <div className="min-w-0">
+                                <span className="text-[10px] font-black text-red-400 uppercase tracking-widest block truncate">
+                                  {item.category || 'Specialty'}
+                                </span>
+                                <h4 className="text-white font-black text-sm tracking-tight truncate">
+                                  {item.name}
+                                </h4>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-xs font-bold text-gray-400">
+                                    ₹{item.price.toFixed(2)} each
+                                  </span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 font-medium">
+                                    Qty: {item.quantity}
+                                  </span>
+                                </div>
+                                {item.available === false && (
+                                  <span className="text-[10px] font-bold text-red-400 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3 h-3" />
+                                    Sold out / unavailable
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-2 shrink-0">
+                              <div className="text-sm sm:text-base font-black text-red-400">
+                                ₹{(item.price * item.quantity).toFixed(2)}
+                              </div>
+                              
+                              <div className="flex items-center gap-1.5 bg-black/60 rounded-xl p-1 border border-white/10">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (item.quantity <= 1) {
+                                      if (onRemoveFromCart) onRemoveFromCart(item.id);
+                                      else if (onUpdateQuantity) onUpdateQuantity(0);
+                                    } else {
+                                      if (onUpdateCartQuantity) onUpdateCartQuantity(item.id, item.quantity - 1);
+                                      else if (onUpdateQuantity) onUpdateQuantity(item.quantity - 1);
+                                    }
+                                  }}
+                                  className="p-1 hover:bg-white/10 rounded-lg text-red-400 hover:text-white transition-colors cursor-pointer"
+                                  title={item.quantity <= 1 ? "Remove item" : "Decrease quantity"}
+                                >
+                                  {item.quantity <= 1 ? <Trash2 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+                                </button>
+                                <span className="w-5 text-center font-black text-xs text-white">
+                                  {item.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onUpdateCartQuantity) onUpdateCartQuantity(item.id, item.quantity + 1);
+                                    else if (onUpdateQuantity) onUpdateQuantity(item.quantity + 1);
+                                  }}
+                                  className="p-1 hover:bg-white/10 rounded-lg text-emerald-400 hover:text-white transition-colors cursor-pointer"
+                                  title="Increase quantity"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Bill / Express Parcel Manifest breakdown */}
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-2.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Items Total ({totalCartCount} portions)</span>
+                          <span className="font-bold text-white">₹{totalCartPrice.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Express Parcels</span>
+                          <span className="font-bold text-emerald-400">{effectiveItems.length} Food Express {effectiveItems.length === 1 ? 'Parcel' : 'Parcels'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Express Delivery & Fresh Packaging</span>
+                          <span className="font-bold text-emerald-400 uppercase text-[10px] tracking-wider">FREE</span>
                         </div>
                         <div className="flex items-center justify-between pt-2.5 border-t border-white/10">
-                          <span className="text-sm font-bold text-gray-200">Total</span>
-                          <span className="text-xl font-black text-red-500">₹{(dish.price * quantity).toFixed(2)}</span>
+                          <span className="text-sm font-bold text-gray-200">Grand Total</span>
+                          <span className="text-xl font-black text-red-500">₹{totalCartPrice.toFixed(2)}</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                )
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
             {/* Footer */}
-            {activeTab === 'selection' && dish && (
-              <div className="p-4 bg-black/40 border-t border-white/10">
-                {dish.available === false ? (
-                  <div className="w-full bg-neutral-800 text-gray-400 py-2.5 px-3 rounded-xl font-bold text-center text-xs border border-red-500/30">
-                    <span className="text-red-400 font-black uppercase tracking-wider block mb-0.5">Currently Sold Out</span>
-                    This dish is temporarily unavailable.
+            {activeTab === 'cart' && effectiveItems.length > 0 && (
+              <div className="p-4 bg-black/60 border-t border-white/10 backdrop-blur-xl">
+                {hasSoldOutItems ? (
+                  <div className="w-full bg-neutral-800 text-gray-300 py-2.5 px-3 rounded-xl font-bold text-center text-xs border border-red-500/30">
+                    <span className="text-red-400 font-black uppercase tracking-wider block mb-0.5">Sold Out Dish in Bag</span>
+                    Please remove any unavailable dishes to place your order.
                   </div>
                 ) : (
                   <button
                     type="button"
                     onClick={onProceedToCheckout}
-                    className="w-full bg-red-600 text-white py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-900/40 active:scale-95 cursor-pointer"
+                    className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-red-950/50 active:scale-95 transition-all cursor-pointer"
                   >
-                    <span>Proceed to Order</span>
+                    <span>Order All {effectiveItems.length} {effectiveItems.length === 1 ? 'Parcel' : 'Parcels'} (₹{totalCartPrice.toFixed(2)})</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}

@@ -5,14 +5,17 @@
 
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Dish } from '../types';
+import { Plus, ShoppingBag } from 'lucide-react';
+import { Dish, CartItem } from '../types';
 
 interface DishCarouselProps {
   dishes: Dish[];
   onSelectDish: (dish: Dish) => void;
+  cartItems?: CartItem[];
+  onAddToCart?: (dish: Dish) => void;
 }
 
-export default function DishCarousel({ dishes, onSelectDish }: DishCarouselProps) {
+export default function DishCarousel({ dishes, onSelectDish, cartItems = [], onAddToCart }: DishCarouselProps) {
   const [isPaused, setIsPaused] = useState(false);
   
   // Duplicate dishes for seamless looping
@@ -77,7 +80,27 @@ export default function DishCarousel({ dishes, onSelectDish }: DishCarouselProps
                     </h3>
                     <p className="text-gray-400 font-medium mt-1">{dish.description}</p>
                   </div>
-                  <span className="font-black text-2xl text-red-500">₹{dish.price.toFixed(2)}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="font-black text-2xl text-red-500">₹{dish.price.toFixed(2)}</span>
+                    {dish.available !== false && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onAddToCart) {
+                            onAddToCart(dish);
+                          } else {
+                            onSelectDish(dish);
+                          }
+                        }}
+                        className="p-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-950/40 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-black"
+                        title="Add to Bag"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Add</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             ))}

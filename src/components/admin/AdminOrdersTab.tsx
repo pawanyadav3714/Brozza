@@ -192,14 +192,14 @@ export default function AdminOrdersTab({
       ) : (
         <div className="grid gap-5">
           <AnimatePresence mode="popLayout">
-            {filteredOrders.map((order) => {
+            {filteredOrders.map((order, orderIdx) => {
               const config = statusMap[order.status] || statusMap.idle;
               const StatusIcon = config.icon;
               const isUpdating = updatingOrderId === order.id;
 
               return (
                 <motion.div
-                  key={order.id}
+                  key={`admin-ord-${order.id}-${orderIdx}`}
                   layout
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}

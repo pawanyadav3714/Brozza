@@ -300,11 +300,11 @@ export default function AdminSyncGatewayModal({
                   </div>
                 ) : (
                   <div className="space-y-2.5">
-                    {recentParcels.map((parcel) => {
+                    {recentParcels.map((parcel, pIdx) => {
                       const parcelId = parcel.parcelId || `PRCL-BRZ-${parcel.id.slice(0, 6).toUpperCase()}`;
                       return (
                         <div
-                          key={parcel.id}
+                          key={`sync-prcl-${parcel.id}-${pIdx}`}
                           className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                         >
                           <div className="space-y-1">

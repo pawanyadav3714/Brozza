@@ -197,11 +197,11 @@ export default function AdminMenuTab({
       {/* Dishes Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence mode="popLayout">
-          {filteredDishes.map((dish) => {
+          {filteredDishes.map((dish, dishIdx) => {
             const isAvailable = dish.available !== false;
             return (
               <motion.div
-                key={dish.id}
+                key={`admin-dish-${dish.id}-${dishIdx}`}
                 layout
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
