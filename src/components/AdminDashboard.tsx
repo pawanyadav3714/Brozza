@@ -37,6 +37,7 @@ interface AdminDashboardProps {
   onDeleteDish: (dishId: string) => void;
   onToggleDishAvailability: (dishId: string) => void;
   onResetDishes: () => void;
+  onUpdateDishQuantity?: (dishId: string, quantity: number) => void;
   inventory: InventoryItem[];
   onUpdateInventoryItem: (item: InventoryItem) => void;
   onAddInventoryItem: (item: InventoryItem) => void;
@@ -55,6 +56,7 @@ export default function AdminDashboard({
   onDeleteDish,
   onToggleDishAvailability,
   onResetDishes,
+  onUpdateDishQuantity,
   inventory,
   onUpdateInventoryItem,
   onAddInventoryItem,
@@ -325,6 +327,7 @@ export default function AdminDashboard({
                 onDeleteDish={onDeleteDish}
                 onToggleDishAvailability={onToggleDishAvailability}
                 onResetDishes={onResetDishes}
+                onUpdateDishQuantity={onUpdateDishQuantity}
               />
             )}
 

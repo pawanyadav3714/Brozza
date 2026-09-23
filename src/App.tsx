@@ -127,13 +127,26 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Clean any legacy placeholder banner references for dish item cards
+          // Clean any legacy placeholder banner references for dish item cards and normalize quantity
           return parsed.map((d: Dish) => {
+            let img = d.image;
+            let name = d.name;
             if (d.image === '/images/unscriptedBanner.jpg') {
-              if (d.name?.toLowerCase().includes('fries')) return { ...d, image: '/images/frenchh.png' };
-              return { ...d, image: '/images/momos.png', name: d.name === 'Unscripted Special Banner Item' ? 'Barozza Special Combo Platter' : d.name };
+              if (d.name?.toLowerCase().includes('fries')) img = '/images/frenchh.png';
+              else {
+                img = '/images/momos.png';
+                if (d.name === 'Unscripted Special Banner Item') name = 'Barozza Special Combo Platter';
+              }
             }
-            return d;
+            const qty = d.quantityAvailable !== undefined ? Number(d.quantityAvailable) : (d.available === false ? 0 : 20);
+            const safeQty = isNaN(qty) ? 20 : Math.max(0, Math.floor(qty));
+            return {
+              ...d,
+              image: img,
+              name,
+              quantityAvailable: safeQty,
+              available: d.available !== false && safeQty > 0,
+            };
           });
         }
       } catch (e) {
@@ -186,6 +199,21 @@ export default function App() {
     saveDishToFirestore(updatedDish, nextDishes);
   };
 
+  const handleUpdateDishQuantity = (dishId: string, newQuantity: number) => {
+    const safeQty = Math.max(0, Math.floor(newQuantity));
+    const isAvailable = safeQty > 0;
+    const target = dishes.find((d) => d.id === dishId);
+    if (!target) return;
+    const updated: Dish = {
+      ...target,
+      quantityAvailable: safeQty,
+      available: isAvailable,
+    };
+    const nextDishes = dishes.map((d) => (d.id === dishId ? updated : d));
+    setDishes(nextDishes);
+    saveDishToFirestore(updated, nextDishes);
+  };
+
   const handleAddDish = (newDish: Dish) => {
     const nextDishes = [newDish, ...dishes];
     setDishes(nextDishes);
@@ -200,7 +228,14 @@ export default function App() {
   const handleToggleDishAvailability = (dishId: string) => {
     const target = dishes.find((d) => d.id === dishId);
     if (!target) return;
-    const toggled = { ...target, available: target.available === false ? true : false };
+    const isCurrentlyAvailable = target.available !== false && (target.quantityAvailable === undefined || target.quantityAvailable > 0);
+    const nextAvailable = !isCurrentlyAvailable;
+    const nextQuantity = nextAvailable ? (target.quantityAvailable && target.quantityAvailable > 0 ? target.quantityAvailable : 20) : 0;
+    const toggled: Dish = {
+      ...target,
+      available: nextAvailable,
+      quantityAvailable: nextQuantity,
+    };
     const nextDishes = dishes.map((d) => (d.id === dishId ? toggled : d));
     setDishes(nextDishes);
     saveDishToFirestore(toggled, nextDishes);
@@ -381,24 +416,37 @@ export default function App() {
   };
 
   const handleAddToCart = (dish: Dish, qty: number = 1) => {
+    const currentDish = dishes.find((d) => d.id === dish.id) || dish;
+    const maxStock = currentDish.quantityAvailable !== undefined ? currentDish.quantityAvailable : (currentDish.available === false ? 0 : 20);
+    
+    if (maxStock <= 0 || currentDish.available === false) {
+      return;
+    }
+
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === dish.id);
       if (existing) {
+        const newQty = Math.min(maxStock, existing.quantity + qty);
         return prev.map((item) =>
-          item.id === dish.id ? { ...item, quantity: item.quantity + qty } : item
+          item.id === dish.id ? { ...item, quantity: newQty, quantityAvailable: maxStock } : item
         );
       }
-      return [...prev, { ...dish, quantity: qty }];
+      const initialQty = Math.min(maxStock, qty);
+      return [...prev, { ...dish, quantity: initialQty, quantityAvailable: maxStock }];
     });
   };
 
   const handleUpdateCartQuantity = (dishId: string, newQty: number) => {
+    const currentDish = dishes.find((d) => d.id === dishId);
+    const maxStock = currentDish?.quantityAvailable !== undefined ? currentDish.quantityAvailable : 99;
+
     setCartItems((prev) => {
       if (newQty <= 0) {
         return prev.filter((item) => item.id !== dishId);
       }
+      const cappedQty = Math.min(maxStock, newQty);
       return prev.map((item) =>
-        item.id === dishId ? { ...item, quantity: newQty } : item
+        item.id === dishId ? { ...item, quantity: cappedQty, quantityAvailable: maxStock } : item
       );
     });
   };
@@ -417,7 +465,11 @@ export default function App() {
   const handleDishSelect = (dish: Dish) => {
     setSelectedDish(dish);
     setQuantity(1);
-    handleAddToCart(dish, 1);
+    const currentDish = dishes.find((d) => d.id === dish.id) || dish;
+    const maxStock = currentDish.quantityAvailable !== undefined ? currentDish.quantityAvailable : (currentDish.available === false ? 0 : 20);
+    if (maxStock > 0 && currentDish.available !== false) {
+      handleAddToCart(currentDish, 1);
+    }
     setIsCartOpen(true);
   };
 
@@ -570,6 +622,26 @@ export default function App() {
         // ignore
       }
 
+      // Automatically deduct ordered portions from kitchen stock and sync live to Firestore
+      setDishes((prevDishes) => {
+        let updatedList = [...prevDishes];
+        for (const item of itemsToOrder) {
+          const target = updatedList.find((d) => d.id === item.id);
+          if (target) {
+            const currentStock = target.quantityAvailable !== undefined ? target.quantityAvailable : 20;
+            const newStock = Math.max(0, currentStock - item.quantity);
+            const updatedDish: Dish = {
+              ...target,
+              quantityAvailable: newStock,
+              available: newStock > 0,
+            };
+            updatedList = updatedList.map((d) => (d.id === item.id ? updatedDish : d));
+            saveDishToFirestore(updatedDish, updatedList);
+          }
+        }
+        return updatedList;
+      });
+
       setStep('success');
     } catch (error) {
       console.error("Error creating batch orders:", error);
@@ -659,6 +731,7 @@ export default function App() {
             onDeleteDish={handleDeleteDish}
             onToggleDishAvailability={handleToggleDishAvailability}
             onResetDishes={handleResetDishes}
+            onUpdateDishQuantity={handleUpdateDishQuantity}
             inventory={inventory}
             onUpdateInventoryItem={handleUpdateInventoryItem}
             onAddInventoryItem={handleAddInventoryItem}
@@ -794,7 +867,9 @@ export default function App() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                       {displayedDishes.map((dish, dishIdx) => {
-                        const isAvailable = dish.available !== false;
+                        const availableStock = dish.quantityAvailable !== undefined ? dish.quantityAvailable : (dish.available === false ? 0 : 20);
+                        const isAvailable = dish.available !== false && availableStock > 0;
+                        const isLowStock = isAvailable && availableStock <= 5;
                         const inCartItem = cartItems.find((item) => item.id === dish.id);
                         const inCartQty = inCartItem?.quantity || 0;
 
@@ -839,8 +914,17 @@ export default function App() {
                                   {dish.category || 'General'}
                                 </span>
                               </div>
+                              {/* Low stock callout on image */}
+                              {isLowStock && (
+                                <div className="absolute bottom-3 left-3">
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/90 backdrop-blur-md text-black shadow-xl flex items-center gap-1.5 animate-pulse">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping" />
+                                    Only {availableStock} left!
+                                  </span>
+                                </div>
+                              )}
                               {!isAvailable && (
-                                <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
+                                <div className="absolute inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center">
                                   <span className="px-4 py-2 rounded-2xl bg-red-600 text-white font-black text-xs uppercase tracking-widest border border-red-400/50 shadow-2xl">
                                     Sold Out
                                   </span>
@@ -867,8 +951,22 @@ export default function App() {
                                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                                     5-10 min
                                   </div>
-                                  <div className="text-xs font-bold text-gray-300 uppercase tracking-widest">
-                                    {isAvailable ? 'Express Parcel' : 'Unavailable'}
+                                  <div className="flex items-center">
+                                    {!isAvailable ? (
+                                      <span className="text-xs font-black uppercase tracking-wider text-red-300 bg-red-950/80 border border-red-500/50 px-3 py-1 rounded-full shadow-md shadow-red-950/50">
+                                        Sold Out
+                                      </span>
+                                    ) : isLowStock ? (
+                                      <span className="text-xs font-black uppercase tracking-wider text-amber-200 bg-amber-950/90 border border-amber-500/60 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md shadow-amber-950/60 animate-pulse">
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 shadow-sm shadow-amber-300 animate-ping" />
+                                        Only {availableStock} Left
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs font-black uppercase tracking-wider text-emerald-200 bg-emerald-950/80 border border-emerald-500/50 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md shadow-emerald-950/50">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-300" />
+                                        {availableStock} Available
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -929,12 +1027,19 @@ export default function App() {
                                       </span>
                                       <button
                                         type="button"
+                                        disabled={inCartQty >= availableStock}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleUpdateCartQuantity(dish.id, inCartQty + 1);
+                                          if (inCartQty < availableStock) {
+                                            handleUpdateCartQuantity(dish.id, inCartQty + 1);
+                                          }
                                         }}
-                                        className="p-1.5 hover:bg-white/10 rounded-lg text-emerald-400 hover:text-white transition-colors cursor-pointer"
-                                        title="Increase quantity"
+                                        className={`p-1.5 rounded-lg transition-colors ${
+                                          inCartQty >= availableStock
+                                            ? 'opacity-30 text-gray-500 cursor-not-allowed'
+                                            : 'hover:bg-white/10 text-emerald-400 hover:text-white cursor-pointer'
+                                        }`}
+                                        title={inCartQty >= availableStock ? "Maximum available portions reached" : "Increase quantity"}
                                       >
                                         <Plus className="w-3.5 h-3.5" />
                                       </button>

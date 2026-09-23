@@ -565,18 +565,25 @@ export default function CartModal({
                                 <h4 className="text-white font-black text-sm tracking-tight truncate">
                                   {item.name}
                                 </h4>
-                                <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                   <span className="text-xs font-bold text-gray-400">
                                     ₹{item.price.toFixed(2)} each
                                   </span>
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 font-medium">
                                     Qty: {item.quantity}
                                   </span>
+                                  {item.quantityAvailable !== undefined && (
+                                    <span className={`text-[10px] font-bold ${
+                                      item.quantityAvailable <= 5 ? 'text-amber-400' : 'text-emerald-400'
+                                    }`}>
+                                      ({item.quantityAvailable} available)
+                                    </span>
+                                  )}
                                 </div>
-                                {item.available === false && (
+                                {(item.available === false || item.quantityAvailable === 0) && (
                                   <span className="text-[10px] font-bold text-red-400 flex items-center gap-1 mt-1">
                                     <AlertCircle className="w-3 h-3" />
-                                    Sold out / unavailable
+                                    Sold out / unavailable in kitchen
                                   </span>
                                 )}
                               </div>
@@ -609,12 +616,18 @@ export default function CartModal({
                                 </span>
                                 <button
                                   type="button"
+                                  disabled={item.quantityAvailable !== undefined && item.quantity >= item.quantityAvailable}
                                   onClick={() => {
+                                    if (item.quantityAvailable !== undefined && item.quantity >= item.quantityAvailable) return;
                                     if (onUpdateCartQuantity) onUpdateCartQuantity(item.id, item.quantity + 1);
                                     else if (onUpdateQuantity) onUpdateQuantity(item.quantity + 1);
                                   }}
-                                  className="p-1 hover:bg-white/10 rounded-lg text-emerald-400 hover:text-white transition-colors cursor-pointer"
-                                  title="Increase quantity"
+                                  className={`p-1 rounded-lg transition-colors ${
+                                    item.quantityAvailable !== undefined && item.quantity >= item.quantityAvailable
+                                      ? 'opacity-30 text-gray-500 cursor-not-allowed'
+                                      : 'hover:bg-white/10 text-emerald-400 hover:text-white cursor-pointer'
+                                  }`}
+                                  title={item.quantityAvailable !== undefined && item.quantity >= item.quantityAvailable ? "Maximum available quantity reached" : "Increase quantity"}
                                 >
                                   <Plus className="w-3.5 h-3.5" />
                                 </button>

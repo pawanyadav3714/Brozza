@@ -12,7 +12,9 @@ export const DISHES: Dish[] = [
     price: 30,
     image: '/images/frenchh.png',
     description: 'Crispy golden fries served hot and fresh.',
-    category: 'Starters'
+    category: 'Starters',
+    available: true,
+    quantityAvailable: 25
   },
   {
     id: '2',
@@ -20,7 +22,9 @@ export const DISHES: Dish[] = [
     price: 45,
     image: '/images/chow.png',
     description: 'Stir-fried noodles with fresh vegetables and aromatic spices.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 20
   },
   {
     id: '3',
@@ -28,7 +32,9 @@ export const DISHES: Dish[] = [
     price: 55,
     image: '/images/eggchowminn.png',
     description: 'Delicious stir-fried noodles with scrambled eggs and seasonal veggies.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 15
   },
   {
     id: '4',
@@ -36,7 +42,9 @@ export const DISHES: Dish[] = [
     price: 65,
     image: '/images/pastaa.png',
     description: 'Italian pasta cooked in a rich, creamy sauce with exotic herbs.',
-    category: 'Italian'
+    category: 'Italian',
+    available: true,
+    quantityAvailable: 18
   },
   {
     id: '5',
@@ -44,7 +52,9 @@ export const DISHES: Dish[] = [
     price: 80,
     image: '/images/paneerchili.png',
     description: 'Spicy cottage cheese chunks tossed with bell peppers and onions.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 12
   },
   {
     id: '6',
@@ -52,7 +62,9 @@ export const DISHES: Dish[] = [
     price: 40,
     image: '/images/momos.png',
     description: 'Soft and succulent dumplings filled with garden-fresh vegetables.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 30
   },
   {
     id: '7',
@@ -60,7 +72,9 @@ export const DISHES: Dish[] = [
     price: 45,
     image: '/images/fried.png',
     description: 'Crispy fried dumplings served with a hot and spicy red chutney.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 22
   },
   {
     id: '8',
@@ -68,7 +82,9 @@ export const DISHES: Dish[] = [
     price: 70,
     image: '/images/babycornchili.png',
     description: 'Tender baby corn tossed in a spicy and tangy Manchurian sauce.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 10
   },
   {
     id: '9',
@@ -76,7 +92,9 @@ export const DISHES: Dish[] = [
     price: 75,
     image: '/images/masroomchili.png',
     description: 'Fresh mushrooms stir-fried with onions, capsicum, and oriental spices.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 14
   },
   {
     id: '10',
@@ -84,7 +102,9 @@ export const DISHES: Dish[] = [
     price: 65,
     image: '/images/menchurian.png',
     description: 'Golden vegetable balls tossed in a flavorful soy-based ginger sauce.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 16
   },
   {
     id: '11',
@@ -92,7 +112,9 @@ export const DISHES: Dish[] = [
     price: 35,
     image: '/images/vegrol.png',
     description: 'Freshly sautéed vegetables wrapped in a soft, flaky paratha.',
-    category: 'Rolls'
+    category: 'Rolls',
+    available: true,
+    quantityAvailable: 20
   },
   {
     id: '12',
@@ -100,7 +122,9 @@ export const DISHES: Dish[] = [
     price: 40,
     image: '/images/eggrol.png',
     description: 'A classic street food favorite with fluffy egg and zesty red onions.',
-    category: 'Rolls'
+    category: 'Rolls',
+    available: true,
+    quantityAvailable: 18
   },
   {
     id: '13',
@@ -108,7 +132,9 @@ export const DISHES: Dish[] = [
     price: 50,
     image: '/images/paneerchili.png',
     description: 'Juicy paneer chunks wrapped with crunchy veggies and sauces.',
-    category: 'Rolls'
+    category: 'Rolls',
+    available: true,
+    quantityAvailable: 15
   },
   {
     id: '14',
@@ -116,7 +142,9 @@ export const DISHES: Dish[] = [
     price: 90,
     image: '/images/coldcoffe.png',
     description: 'Blended chilled coffee topped with rich vanilla ice cream.',
-    category: 'Beverages'
+    category: 'Beverages',
+    available: true,
+    quantityAvailable: 25
   },
   {
     id: '15',
@@ -124,7 +152,9 @@ export const DISHES: Dish[] = [
     price: 60,
     image: '/images/chow.png',
     description: 'Fragrant basmati rice wok-tossed with fresh garden vegetables.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 15
   },
   {
     id: '16',
@@ -132,7 +162,9 @@ export const DISHES: Dish[] = [
     price: 70,
     image: '/images/eggchowminn.png',
     description: 'Fiery wok-tossed noodles in pungent Schezwan chili garlic sauce.',
-    category: 'Chinese'
+    category: 'Chinese',
+    available: true,
+    quantityAvailable: 12
   },
   {
     id: '17',
@@ -140,7 +172,9 @@ export const DISHES: Dish[] = [
     price: 85,
     image: '/images/pastaa.png',
     description: 'Toasted artisanal bread loaded with melted mozzarella and herbs.',
-    category: 'Italian'
+    category: 'Italian',
+    available: true,
+    quantityAvailable: 10
   },
   {
     id: '18',
@@ -148,7 +182,9 @@ export const DISHES: Dish[] = [
     price: 120,
     image: '/images/momos.png',
     description: 'Chef special assortment of steamed momos, crispy bites and house dips.',
-    category: 'Specials'
+    category: 'Specials',
+    available: true,
+    quantityAvailable: 8
   }
 ];
 

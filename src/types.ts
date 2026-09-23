@@ -11,6 +11,7 @@ export interface Dish {
   description: string;
   category: string;
   available?: boolean;
+  quantityAvailable?: number;
 }
 
 export interface CartItem extends Dish {

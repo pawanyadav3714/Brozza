@@ -62,13 +62,21 @@ export default function DishCarousel({ dishes, onSelectDish, cartItems = [], onA
                     }`}
                   />
                   <div className="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
-                  <div className="absolute bottom-6 left-6 text-white flex items-center gap-2">
+                  <div className="absolute bottom-6 left-6 text-white flex items-center gap-2 flex-wrap">
                     <span className="px-4 py-1.5 bg-red-600/80 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
                       {dish.category}
                     </span>
-                    {dish.available === false && (
+                    {dish.available === false || dish.quantityAvailable === 0 ? (
                       <span className="px-3 py-1.5 bg-neutral-900/90 border border-red-500/40 text-red-400 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
                         Sold Out
+                      </span>
+                    ) : (dish.quantityAvailable ?? 20) <= 5 ? (
+                      <span className="px-3 py-1.5 bg-amber-500/90 text-black font-black backdrop-blur-xl rounded-full text-[10px] uppercase tracking-widest shadow-lg animate-pulse">
+                        Only {dish.quantityAvailable} Left!
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1.5 bg-emerald-600/80 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
+                        {dish.quantityAvailable} Available
                       </span>
                     )}
                   </div>
@@ -82,7 +90,7 @@ export default function DishCarousel({ dishes, onSelectDish, cartItems = [], onA
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="font-black text-2xl text-red-500">₹{dish.price.toFixed(2)}</span>
-                    {dish.available !== false && (
+                    {dish.available !== false && (dish.quantityAvailable === undefined || dish.quantityAvailable > 0) && (
                       <button
                         type="button"
                         onClick={(e) => {

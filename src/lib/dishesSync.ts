@@ -26,7 +26,17 @@ export function normalizeDish(raw: any, fallbackId?: string): Dish {
   const category = String(raw.category || 'Starters');
   const description = String(raw.description || '');
   const image = String(raw.image || raw.imageUrl || '/images/frenchh.png');
-  const available = raw.available !== false && (raw.stock === undefined || Number(raw.stock) > 0);
+
+  // Parse available quantity: check quantityAvailable, stock, or fallback
+  const rawQty = raw.quantityAvailable !== undefined 
+    ? raw.quantityAvailable 
+    : (raw.stock !== undefined ? raw.stock : (typeof raw.quantity === 'number' ? raw.quantity : undefined));
+  
+  let quantityAvailable = rawQty !== undefined ? Math.max(0, Math.floor(Number(rawQty))) : 20;
+  if (isNaN(quantityAvailable)) quantityAvailable = 20;
+
+  // Available if flag is not false AND quantityAvailable > 0
+  const available = raw.available !== false && quantityAvailable > 0;
 
   return {
     id,
@@ -36,6 +46,7 @@ export function normalizeDish(raw: any, fallbackId?: string): Dish {
     description,
     image,
     available,
+    quantityAvailable,
   };
 }
 
@@ -134,6 +145,12 @@ export function subscribeToDishes(onDishesUpdated: (dishes: Dish[]) => void) {
  */
 export async function saveDishToFirestore(dish: Dish, allDishes: Dish[]) {
   try {
+    const qty = dish.quantityAvailable !== undefined 
+      ? Math.max(0, Math.floor(Number(dish.quantityAvailable))) 
+      : (dish.available === false ? 0 : 20);
+
+    const isAvailable = dish.available !== false && qty > 0;
+
     const dishData = {
       id: dish.id,
       dishId: dish.id,
@@ -143,7 +160,9 @@ export async function saveDishToFirestore(dish: Dish, allDishes: Dish[]) {
       description: dish.description,
       image: dish.image,
       imageUrl: dish.image,
-      available: dish.available !== false,
+      available: isAvailable,
+      quantityAvailable: qty,
+      stock: qty,
       lastUpdated: new Date().toISOString(),
     };
 
@@ -166,6 +185,8 @@ export async function saveDishToFirestore(dish: Dish, allDishes: Dish[]) {
         category: d.category,
         description: d.description,
         imageUrl: d.image,
+        available: d.available !== false && (d.quantityAvailable === undefined || d.quantityAvailable > 0),
+        quantityAvailable: d.quantityAvailable ?? 20,
       }));
     }
 
@@ -190,6 +211,21 @@ export async function saveDishToFirestore(dish: Dish, allDishes: Dish[]) {
   } catch (error) {
     console.error('Failed to sync dish to Firestore:', error);
   }
+}
+
+/**
+ * Direct real-time helper for Admin to manually update a dish's available quantity
+ */
+export async function updateDishStockInFirestore(dishId: string, newQuantity: number, allDishes: Dish[]) {
+  const target = allDishes.find((d) => d.id === dishId);
+  if (!target) return;
+  const safeQty = Math.max(0, Math.floor(newQuantity));
+  const updatedDish: Dish = {
+    ...target,
+    quantityAvailable: safeQty,
+    available: safeQty > 0,
+  };
+  await saveDishToFirestore(updatedDish, allDishes);
 }
 
 /**

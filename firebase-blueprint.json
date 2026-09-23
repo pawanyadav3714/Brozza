@@ -58,6 +58,7 @@
         "description": { "type": "string", "description": "Description of the dish" },
         "image": { "type": "string", "description": "Image URL or asset path" },
         "available": { "type": "boolean", "description": "Whether the dish is in stock and available" },
+        "quantityAvailable": { "type": "number", "description": "Number of available portions or servings currently in stock" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

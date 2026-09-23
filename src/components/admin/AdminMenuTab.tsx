@@ -16,7 +16,11 @@ import {
   RotateCcw,
   Sparkles,
   DollarSign,
-  X
+  X,
+  Minus,
+  Boxes,
+  Layers,
+  AlertTriangle
 } from 'lucide-react';
 import { Dish } from '../../types';
 
@@ -27,6 +31,7 @@ interface AdminMenuTabProps {
   onDeleteDish: (dishId: string) => void;
   onToggleDishAvailability: (dishId: string) => void;
   onResetDishes: () => void;
+  onUpdateDishQuantity?: (dishId: string, quantity: number) => void;
 }
 
 const PRESET_IMAGES = [
@@ -53,6 +58,7 @@ export default function AdminMenuTab({
   onDeleteDish,
   onToggleDishAvailability,
   onResetDishes,
+  onUpdateDishQuantity,
 }: AdminMenuTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -71,6 +77,24 @@ export default function AdminMenuTab({
   const [formDescription, setFormDescription] = useState('');
   const [formImage, setFormImage] = useState('/images/frenchh.png');
   const [formAvailable, setFormAvailable] = useState(true);
+  const [formQuantityAvailable, setFormQuantityAvailable] = useState<number>(20);
+
+  // Direct stock modifier handler for fast live editing
+  const handleDirectStockChange = (dish: Dish, newStock: number) => {
+    const safeStock = Math.max(0, Math.floor(newStock));
+    const isNowAvailable = safeStock > 0;
+    
+    if (onUpdateDishQuantity) {
+      onUpdateDishQuantity(dish.id, safeStock);
+    } else {
+      const updated: Dish = {
+        ...dish,
+        quantityAvailable: safeStock,
+        available: isNowAvailable,
+      };
+      onUpdateDish(updated);
+    }
+  };
 
   const openAddModal = () => {
     setFormName('');
@@ -79,6 +103,7 @@ export default function AdminMenuTab({
     setFormDescription('');
     setFormImage('/images/frenchh.png');
     setFormAvailable(true);
+    setFormQuantityAvailable(20);
     setIsAddModalOpen(true);
   };
 
@@ -89,13 +114,15 @@ export default function AdminMenuTab({
     setFormCategory(dish.category || 'Starters');
     setFormDescription(dish.description);
     setFormImage(dish.image);
-    setFormAvailable(dish.available !== false);
+    setFormAvailable(dish.available !== false && (dish.quantityAvailable === undefined || dish.quantityAvailable > 0));
+    setFormQuantityAvailable(dish.quantityAvailable ?? (dish.available === false ? 0 : 20));
   };
 
   const handleSaveAdd = (e: FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) return;
 
+    const stock = Math.max(0, Math.floor(Number(formQuantityAvailable) || 0));
     const newDish: Dish = {
       id: `dish-${Date.now()}`,
       name: formName.trim(),
@@ -103,7 +130,8 @@ export default function AdminMenuTab({
       category: formCategory,
       description: formDescription.trim() || 'Freshly prepared specialty dish.',
       image: formImage.trim() || '/images/frenchh.png',
-      available: formAvailable,
+      available: formAvailable && stock > 0,
+      quantityAvailable: stock,
     };
 
     onAddDish(newDish);
@@ -114,6 +142,7 @@ export default function AdminMenuTab({
     e.preventDefault();
     if (!editingDish || !formName.trim()) return;
 
+    const stock = Math.max(0, Math.floor(Number(formQuantityAvailable) || 0));
     const updated: Dish = {
       ...editingDish,
       name: formName.trim(),
@@ -121,7 +150,8 @@ export default function AdminMenuTab({
       category: formCategory,
       description: formDescription.trim(),
       image: formImage.trim() || editingDish.image,
-      available: formAvailable,
+      available: formAvailable && stock > 0,
+      quantityAvailable: stock,
     };
 
     onUpdateDish(updated);
@@ -269,6 +299,94 @@ export default function AdminMenuTab({
                     <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed font-medium">
                       {dish.description}
                     </p>
+                  </div>
+
+                  {/* Quantity Available / Stock Controller */}
+                  <div className="mx-6 mb-4 p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold">
+                        <Boxes className="w-3.5 h-3.5 text-red-400" />
+                        <span className="text-gray-300">Quantity Available:</span>
+                      </div>
+                      <div>
+                        {dish.quantityAvailable === 0 || !isAvailable ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600/30 text-red-400 border border-red-500/30">
+                            Sold Out (0)
+                          </span>
+                        ) : (dish.quantityAvailable ?? 20) <= 5 ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            Low ({dish.quantityAvailable} left)
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            In Stock ({dish.quantityAvailable ?? 20})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Stepper + Direct Editable Number Input */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center flex-1 bg-white/5 border border-white/10 rounded-xl overflow-hidden focus-within:border-red-500/50">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = dish.quantityAvailable ?? (isAvailable ? 20 : 0);
+                            handleDirectStockChange(dish, Math.max(0, current - 1));
+                          }}
+                          className="px-3 py-1.5 hover:bg-white/10 text-red-400 hover:text-white transition-colors cursor-pointer"
+                          title="Decrease quantity by 1"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+
+                        <input
+                          type="number"
+                          min="0"
+                          value={dish.quantityAvailable !== undefined ? dish.quantityAvailable : (isAvailable ? 20 : 0)}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            handleDirectStockChange(dish, isNaN(val) ? 0 : Math.max(0, val));
+                          }}
+                          className="w-full text-center bg-transparent text-sm font-black text-white focus:outline-none py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          title="Click to manually edit available portions (Live customer sync)"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = dish.quantityAvailable ?? (isAvailable ? 20 : 0);
+                            handleDirectStockChange(dish, current + 1);
+                          }}
+                          className="px-3 py-1.5 hover:bg-white/10 text-emerald-400 hover:text-white transition-colors cursor-pointer"
+                          title="Increase quantity by 1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Quick Preset Buttons */}
+                      <button
+                        type="button"
+                        onClick={() => handleDirectStockChange(dish, 0)}
+                        className="px-2 py-1.5 rounded-xl bg-white/5 hover:bg-red-500/20 text-[11px] font-black text-gray-400 hover:text-red-400 border border-white/5 transition-colors cursor-pointer"
+                        title="Set to 0 (Mark Out of Stock)"
+                      >
+                        0 (Out)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = dish.quantityAvailable ?? 0;
+                          handleDirectStockChange(dish, current + 10);
+                        }}
+                        className="px-2 py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-[11px] font-black text-gray-400 hover:text-emerald-400 border border-white/5 transition-colors cursor-pointer"
+                        title="Add 10 portions to stock"
+                      >
+                        +10
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -454,6 +572,78 @@ export default function AdminMenuTab({
                   />
                 </div>
 
+                {/* Quantity Available Field in Form */}
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-white text-xs font-bold flex items-center gap-1.5">
+                        <Boxes className="w-3.5 h-3.5 text-red-400" />
+                        Quantity Available (Portions in Kitchen) *
+                      </p>
+                      <p className="text-gray-400 text-[11px]">
+                        Live count visible to customers. Set to 0 to mark as Sold Out.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      Live Sync
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                        value={formQuantityAvailable}
+                        onChange={(e) => {
+                          const val = Math.max(0, parseInt(e.target.value) || 0);
+                          setFormQuantityAvailable(val);
+                          if (val === 0) setFormAvailable(false);
+                          else if (!formAvailable) setFormAvailable(true);
+                        }}
+                        className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-red-500/60 font-bold"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormQuantityAvailable(0);
+                          setFormAvailable(false);
+                        }}
+                        className="px-2.5 py-2 rounded-xl bg-white/5 hover:bg-red-500/20 text-xs font-bold text-gray-300 hover:text-red-400 border border-white/10 transition-colors cursor-pointer"
+                        title="Set out of stock"
+                      >
+                        0 (Out)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormQuantityAvailable((prev) => prev + 10);
+                          setFormAvailable(true);
+                        }}
+                        className="px-2.5 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-xs font-bold text-gray-300 hover:text-emerald-400 border border-white/10 transition-colors cursor-pointer"
+                        title="Add 10"
+                      >
+                        +10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormQuantityAvailable((prev) => prev + 25);
+                          setFormAvailable(true);
+                        }}
+                        className="px-2.5 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-xs font-bold text-gray-300 hover:text-emerald-400 border border-white/10 transition-colors cursor-pointer"
+                        title="Add 25"
+                      >
+                        +25
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Availability Toggle in Form */}
                 <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10">
                   <div>
@@ -462,7 +652,12 @@ export default function AdminMenuTab({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setFormAvailable(!formAvailable)}
+                    onClick={() => {
+                      const next = !formAvailable;
+                      setFormAvailable(next);
+                      if (!next) setFormQuantityAvailable(0);
+                      else if (formQuantityAvailable === 0) setFormQuantityAvailable(20);
+                    }}
                     className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                       formAvailable
                         ? 'bg-emerald-600 text-white shadow-md'
