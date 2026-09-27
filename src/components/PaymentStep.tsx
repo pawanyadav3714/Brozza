@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CreditCard, Wallet, QrCode, CheckCircle2, ArrowLeft, Loader2, LogIn, ShieldCheck, Zap, Package } from 'lucide-react';
+import { CreditCard, Wallet, QrCode, CheckCircle2, ArrowLeft, Loader2, LogIn, ShieldCheck, Zap, Package, UserCheck } from 'lucide-react';
 import { useFirebase } from './FirebaseProvider';
 import { UserAddress, CartItem } from '../types';
 import { getRazorpayKeyId, loadRazorpayScript } from '../lib/razorpay';
@@ -21,7 +21,7 @@ interface PaymentStepProps {
 }
 
 export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress, dishName, quantity = 1, cartItems = [] }: PaymentStepProps) {
-  const { user, signInWithGoogle, isSigningIn } = useFirebase();
+  const { user, signInWithGoogle, isSigningIn, authError, signInAsGuest } = useFirebase();
   const [method, setMethod] = useState<'razorpay' | 'cod'>('razorpay');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -140,16 +140,40 @@ export default function PaymentStep({ onBack, onConfirm, totalPrice, userAddress
           className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-2xl p-6 mb-6 text-center shadow-2xl"
         >
           <LogIn className="w-10 h-10 text-red-500 mx-auto mb-4" />
-          <h3 className="text-xl font-black text-white mb-2">Authentication Required</h3>
-          <p className="text-gray-400 text-xs sm:text-sm font-medium leading-relaxed mb-6">Please sign in with Google to securely place your order and track its progress.</p>
-          <button
-            onClick={signInWithGoogle}
-            disabled={isSigningIn}
-            className="w-full py-3 bg-white text-black font-black text-sm rounded-xl hover:bg-gray-200 transition-all shadow-lg disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            {isSigningIn ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : null}
-            <span>{isSigningIn ? 'Connecting to Google...' : 'Sign In with Google'}</span>
-          </button>
+          <h3 className="text-xl font-black text-white mb-2">Customer Identification</h3>
+          <p className="text-gray-400 text-xs sm:text-sm font-medium leading-relaxed mb-6">
+            Sign in with Google or continue with your verified details to complete payment and track your order.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={signInWithGoogle}
+              disabled={isSigningIn}
+              className="w-full py-3 bg-white text-black font-black text-sm rounded-xl hover:bg-gray-200 transition-all shadow-lg disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {isSigningIn ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : null}
+              <span>{isSigningIn ? 'Connecting to Google...' : 'Sign In with Google'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => signInAsGuest(userAddress?.name)}
+              className="w-full py-3 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <UserCheck className="w-4 h-4 text-emerald-400" />
+              <span>Continue as {userAddress?.name ? userAddress.name : 'Verified Diner'}</span>
+            </button>
+          </div>
+
+          {authError?.code === 'auth/unauthorized-domain' && (
+            <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs text-left">
+              <p className="font-bold text-[11px] uppercase tracking-wider text-amber-200 mb-1">
+                Notice: Domain Authorization Pending
+              </p>
+              <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                Google sign-in is restricted until this domain is authorized in Firebase Console. You can click <strong>&quot;Continue as {userAddress?.name || 'Verified Diner'}&quot;</strong> above to complete your order without delay!
+              </p>
+            </div>
+          )}
         </motion.div>
       ) : (
         <>

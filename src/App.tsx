@@ -20,6 +20,7 @@ import SuccessStep from './components/SuccessStep';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSyncGatewayModal from './components/AdminSyncGatewayModal';
 import ContactModal from './components/ContactModal';
+import UnauthorizedDomainModal from './components/UnauthorizedDomainModal';
 import { PhoneCall, Plus, Minus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { DISHES, INITIAL_INVENTORY } from './data';
 import { Dish, CartItem, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage, CafeStatus } from './types';
@@ -1306,6 +1307,8 @@ export default function App() {
         isOpen={isContactOpen}
         onClose={() => setIsContactOpen(false)}
       />
+
+      <UnauthorizedDomainModal />
     </div>
   );
 }
