@@ -59,6 +59,9 @@ interface CartModalProps {
   onUpdateOrderStatus?: (orderId: string, newStage: PipelineStage) => Promise<void> | void;
   onSelectDishForNewOrder?: () => void;
   onPurgeExpired?: () => Promise<void> | void;
+  isCafeOpen?: boolean;
+  closureReason?: string;
+  reopenTime?: string;
 }
 
 export default function CartModal({
@@ -75,7 +78,10 @@ export default function CartModal({
   orders = [],
   onUpdateOrderStatus,
   onSelectDishForNewOrder,
-  onPurgeExpired
+  onPurgeExpired,
+  isCafeOpen = true,
+  closureReason = '',
+  reopenTime = ''
 }: CartModalProps) {
   const { user } = useFirebase();
 
@@ -665,7 +671,31 @@ export default function CartModal({
             {/* Footer */}
             {activeTab === 'cart' && effectiveItems.length > 0 && (
               <div className="p-4 bg-black/60 border-t border-white/10 backdrop-blur-xl">
-                {hasSoldOutItems ? (
+                {!isCafeOpen ? (
+                  <div className="space-y-2">
+                    <div className="w-full bg-red-950/80 text-red-200 py-3 px-4 rounded-xl font-medium text-xs border border-red-500/50 shadow-lg shadow-red-950/40">
+                      <div className="flex items-center gap-2 font-black text-sm text-white mb-1">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                        <span>The Barozza Cafe is Currently Closed</span>
+                      </div>
+                      <p className="text-gray-300">
+                        {closureReason || 'New checkouts are temporarily paused. You can keep items in your bag or review past orders.'}
+                      </p>
+                      {reopenTime && (
+                        <p className="text-amber-300 font-bold mt-1 text-[11px]">
+                          Expected Reopening: {reopenTime}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full bg-neutral-900 border border-white/10 text-gray-500 py-3.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed"
+                    >
+                      <span>Cafe Closed • Orders Paused</span>
+                    </button>
+                  </div>
+                ) : hasSoldOutItems ? (
                   <div className="w-full bg-neutral-800 text-gray-300 py-2.5 px-3 rounded-xl font-bold text-center text-xs border border-red-500/30">
                     <span className="text-red-400 font-black uppercase tracking-wider block mb-0.5">Sold Out Dish in Bag</span>
                     Please remove any unavailable dishes to place your order.

@@ -7,10 +7,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, setDoc, serverTimestamp, doc, onSnapshot, query, orderBy, limit, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
-import { subscribeToDishes, saveDishToFirestore, deleteDishFromFirestore } from './lib/dishesSync';
+import { subscribeToDishes, saveDishToFirestore, deleteDishFromFirestore, getDeletedDishKeys } from './lib/dishesSync';
+import { subscribeToCafeStatus, updateCafeStatus, getCachedCafeStatus } from './lib/cafeStatusSync';
 import { useFirebase } from './components/FirebaseProvider';
 import Header from './components/Header';
 import DishCarousel from './components/DishCarousel';
+import CafeClosedBanner from './components/CafeClosedBanner';
 import CartModal from './components/CartModal';
 import CheckoutStep from './components/CheckoutStep';
 import PaymentStep from './components/PaymentStep';
@@ -20,7 +22,7 @@ import AdminSyncGatewayModal from './components/AdminSyncGatewayModal';
 import ContactModal from './components/ContactModal';
 import { PhoneCall, Plus, Minus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { DISHES, INITIAL_INVENTORY } from './data';
-import { Dish, CartItem, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage } from './types';
+import { Dish, CartItem, AppStep, UserAddress, OrderStatus, InventoryItem, Order, PipelineStage, CafeStatus } from './types';
 import { normalizePipelineStage } from './components/ParcelPipelineTracker';
 import { 
   RETENTION_PERIOD_MS, 
@@ -105,6 +107,37 @@ export default function App() {
   const [maxPriceFilter, setMaxPriceFilter] = useState<number | null>(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
 
+  // Live Cafe Operational Status (Open / Closed) with instant multi-tab & Firestore sync
+  const [cafeStatus, setCafeStatus] = useState<CafeStatus>(getCachedCafeStatus);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToCafeStatus((status) => {
+      setCafeStatus(status);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleToggleCafeStatus = async (isOpen: boolean, closureReason?: string, reopenTime?: string) => {
+    // Instant optimistic update (0ms UI latency)
+    const optimistic: CafeStatus = {
+      ...cafeStatus,
+      isOpen,
+      status: isOpen ? 'open' : 'closed',
+      isCafeOpen: isOpen,
+      closureReason: closureReason || (isOpen ? '' : 'The Barozza Cafe is currently closed. Ordering will resume shortly.'),
+      reopenTime: reopenTime || '',
+      formattedReopenTime: reopenTime || '',
+      updatedAt: new Date().toISOString(),
+    };
+    setCafeStatus(optimistic);
+
+    await updateCafeStatus(isOpen, {
+      closureReason,
+      reopenTime,
+      closedBy: user?.displayName || user?.email || 'The Admin',
+    });
+  };
+
   // Real-time live orders list with persistence and 2-day retention policy
   const [orders, setOrders] = useState<Order[]>(() => {
     const validCachedOrders = purgeExpiredLocalStorageOrders();
@@ -127,27 +160,30 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          const { ids: delIds, names: delNames } = getDeletedDishKeys();
           // Clean any legacy placeholder banner references for dish item cards and normalize quantity
-          return parsed.map((d: Dish) => {
-            let img = d.image;
-            let name = d.name;
-            if (d.image === '/images/unscriptedBanner.jpg') {
-              if (d.name?.toLowerCase().includes('fries')) img = '/images/frenchh.png';
-              else {
-                img = '/images/momos.png';
-                if (d.name === 'Unscripted Special Banner Item') name = 'Barozza Special Combo Platter';
+          return parsed
+            .filter((d: Dish) => !delIds.has(d.id) && !delNames.has(d.name?.trim().toLowerCase()))
+            .map((d: Dish) => {
+              let img = d.image;
+              let name = d.name;
+              if (d.image === '/images/unscriptedBanner.jpg') {
+                if (d.name?.toLowerCase().includes('fries')) img = '/images/frenchh.png';
+                else {
+                  img = '/images/momos.png';
+                  if (d.name === 'Unscripted Special Banner Item') name = 'Barozza Special Combo Platter';
+                }
               }
-            }
-            const qty = d.quantityAvailable !== undefined ? Number(d.quantityAvailable) : (d.available === false ? 0 : 20);
-            const safeQty = isNaN(qty) ? 20 : Math.max(0, Math.floor(qty));
-            return {
-              ...d,
-              image: img,
-              name,
-              quantityAvailable: safeQty,
-              available: d.available !== false && safeQty > 0,
-            };
-          });
+              const qty = d.quantityAvailable !== undefined ? Number(d.quantityAvailable) : (d.available === false ? 0 : 20);
+              const safeQty = isNaN(qty) ? 20 : Math.max(0, Math.floor(qty));
+              return {
+                ...d,
+                image: img,
+                name,
+                quantityAvailable: safeQty,
+                available: d.available !== false && safeQty > 0,
+              };
+            });
         }
       } catch (e) {
         console.warn('Failed to parse cached dishes:', e);
@@ -221,8 +257,21 @@ export default function App() {
   };
 
   const handleDeleteDish = (dishId: string) => {
-    setDishes((prev) => prev.filter((d) => d.id !== dishId));
-    deleteDishFromFirestore(dishId);
+    const target = dishes.find((d) => d.id === dishId);
+    const targetName = target?.name;
+    const remaining = dishes.filter(
+      (d) => d.id !== dishId && (targetName ? d.name.trim().toLowerCase() !== targetName.trim().toLowerCase() : true)
+    );
+    setDishes(remaining);
+    try {
+      localStorage.setItem('barozza_cafe_dishes', JSON.stringify(remaining));
+    } catch {}
+    setCartItems((prev) =>
+      prev.filter(
+        (item) => item.id !== dishId && (targetName ? item.name.trim().toLowerCase() !== targetName.trim().toLowerCase() : true)
+      )
+    );
+    deleteDishFromFirestore(dishId, targetName);
   };
 
   const handleToggleDishAvailability = (dishId: string) => {
@@ -416,6 +465,9 @@ export default function App() {
   };
 
   const handleAddToCart = (dish: Dish, qty: number = 1) => {
+    if (!cafeStatus.isOpen) {
+      return;
+    }
     const currentDish = dishes.find((d) => d.id === dish.id) || dish;
     const maxStock = currentDish.quantityAvailable !== undefined ? currentDish.quantityAvailable : (currentDish.available === false ? 0 : 20);
     
@@ -465,15 +517,21 @@ export default function App() {
   const handleDishSelect = (dish: Dish) => {
     setSelectedDish(dish);
     setQuantity(1);
-    const currentDish = dishes.find((d) => d.id === dish.id) || dish;
-    const maxStock = currentDish.quantityAvailable !== undefined ? currentDish.quantityAvailable : (currentDish.available === false ? 0 : 20);
-    if (maxStock > 0 && currentDish.available !== false) {
-      handleAddToCart(currentDish, 1);
+    if (cafeStatus.isOpen) {
+      const currentDish = dishes.find((d) => d.id === dish.id) || dish;
+      const maxStock = currentDish.quantityAvailable !== undefined ? currentDish.quantityAvailable : (currentDish.available === false ? 0 : 20);
+      if (maxStock > 0 && currentDish.available !== false) {
+        handleAddToCart(currentDish, 1);
+      }
     }
     setIsCartOpen(true);
   };
 
   const handleProceedToCheckout = () => {
+    if (!cafeStatus.isOpen) {
+      setIsCartOpen(true);
+      return;
+    }
     setIsCartOpen(false);
     setStep('checkout');
   };
@@ -722,6 +780,7 @@ export default function App() {
             step={step}
             orderStatus={orderStatus}
             orders={orders}
+            cafeStatus={cafeStatus}
           />
           <AdminDashboard 
             onBack={() => setStep('menu')}
@@ -738,6 +797,8 @@ export default function App() {
             onDeleteInventoryItem={handleDeleteInventoryItem}
             onAdjustInventoryStock={handleAdjustInventoryStock}
             onResetInventory={handleResetInventory}
+            cafeStatus={cafeStatus}
+            onToggleCafeStatus={handleToggleCafeStatus}
           />
         </div>
       </div>
@@ -756,6 +817,7 @@ export default function App() {
           step={step}
           orderStatus={orderStatus}
           orders={orders}
+          cafeStatus={cafeStatus}
         />
 
         <main className="pb-24">
@@ -840,11 +902,15 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Live Cafe Operational Alert Banner if closed */}
+                  <CafeClosedBanner cafeStatus={cafeStatus} />
+
                   <DishCarousel 
                     dishes={displayedDishes} 
                     onSelectDish={handleDishSelect} 
                     cartItems={cartItems}
                     onAddToCart={(dish) => handleAddToCart(dish, 1)}
+                    isCafeOpen={cafeStatus.isOpen}
                   />
 
                   <section className="mt-20">
@@ -923,13 +989,20 @@ export default function App() {
                                   </span>
                                 </div>
                               )}
-                              {!isAvailable && (
+                              {!cafeStatus.isOpen ? (
+                                <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3">
+                                  <span className="px-3.5 py-1.5 rounded-2xl bg-red-950/90 text-red-200 font-black text-xs uppercase tracking-widest border border-red-500/60 shadow-2xl flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                                    Cafe Closed
+                                  </span>
+                                </div>
+                              ) : !isAvailable ? (
                                 <div className="absolute inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center">
                                   <span className="px-4 py-2 rounded-2xl bg-red-600 text-white font-black text-xs uppercase tracking-widest border border-red-400/50 shadow-2xl">
                                     Sold Out
                                   </span>
                                 </div>
-                              )}
+                              ) : null}
                             </div>
 
                             {/* Dish Details & Cart Button Container */}
@@ -952,7 +1025,12 @@ export default function App() {
                                     5-10 min
                                   </div>
                                   <div className="flex items-center">
-                                    {!isAvailable ? (
+                                    {!cafeStatus.isOpen ? (
+                                      <span className="text-xs font-black uppercase tracking-wider text-red-300 bg-red-950/80 border border-red-500/50 px-3 py-1 rounded-full shadow-md shadow-red-950/50 flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                                        Closed
+                                      </span>
+                                    ) : !isAvailable ? (
                                       <span className="text-xs font-black uppercase tracking-wider text-red-300 bg-red-950/80 border border-red-500/50 px-3 py-1 rounded-full shadow-md shadow-red-950/50">
                                         Sold Out
                                       </span>
@@ -973,7 +1051,16 @@ export default function App() {
 
                               {/* Cart Action Buttons */}
                               <div className="pt-1 mt-auto">
-                                {!isAvailable ? (
+                                {!cafeStatus.isOpen ? (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="w-full py-3 px-4 rounded-2xl bg-neutral-900 border border-red-500/30 text-gray-400 font-black text-xs uppercase tracking-wider text-center cursor-not-allowed flex items-center justify-center gap-2 shadow-inner"
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                                    <span>Cafe Closed • Orders Paused</span>
+                                  </button>
+                                ) : !isAvailable ? (
                                   <button
                                     type="button"
                                     disabled
@@ -1143,16 +1230,27 @@ export default function App() {
               >
                 View Bag
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleProceedToCheckout();
-                }}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-xs font-black flex items-center gap-1.5 shadow-lg shadow-red-900/50 active:scale-95 transition-all cursor-pointer"
-              >
-                <span>Order All Parcels</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+              {!cafeStatus.isOpen ? (
+                <button
+                  type="button"
+                  disabled
+                  className="px-4 py-2 rounded-xl bg-neutral-800 text-gray-400 text-xs font-black flex items-center gap-1.5 cursor-not-allowed border border-red-500/30"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                  <span>Cafe Closed</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleProceedToCheckout();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-xs font-black flex items-center gap-1.5 shadow-lg shadow-red-900/50 active:scale-95 transition-all cursor-pointer"
+                >
+                  <span>Order All Parcels</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </motion.div>
         )}
@@ -1179,6 +1277,9 @@ export default function App() {
           const valid = purgeExpiredLocalStorageOrders();
           setOrders(valid);
         }}
+        isCafeOpen={cafeStatus.isOpen}
+        closureReason={cafeStatus.closureReason}
+        reopenTime={cafeStatus.reopenTime}
       />
 
       <AdminSyncGatewayModal

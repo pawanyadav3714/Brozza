@@ -26,7 +26,7 @@ import {
   ZoomOut,
   RotateCcw
 } from 'lucide-react';
-import { OrderStatus, Order } from '../types';
+import { OrderStatus, Order, CafeStatus } from '../types';
 import { useFirebase } from './FirebaseProvider';
 import { normalizePipelineStage } from './ParcelPipelineTracker';
 
@@ -38,6 +38,7 @@ interface HeaderProps {
   step: string;
   orderStatus: OrderStatus;
   orders?: Order[];
+  cafeStatus?: CafeStatus;
 }
 
 const statusConfig = {
@@ -101,7 +102,8 @@ export default function Header({
   onBackToMenu, 
   step, 
   orderStatus,
-  orders = [] 
+  orders = [],
+  cafeStatus
 }: HeaderProps) {
   const { user, signInWithGoogle, signOutUser, isSigningIn } = useFirebase();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -145,6 +147,8 @@ export default function Header({
     }
   };
 
+  const isCafeClosed = cafeStatus ? !cafeStatus.isOpen : false;
+
   return (
     <header className="sticky top-0 z-40 w-full bg-black/40 backdrop-blur-xl border-b border-white/10 shadow-2xl">
       <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between gap-4">
@@ -175,8 +179,38 @@ export default function Header({
           </div>
         </div>
 
-        {/* Responsive Menu Button at exact midpoint of header */}
-        <div className="flex items-center justify-center">
+        {/* Responsive Menu Button and Live Cafe Status at exact midpoint of header */}
+        <div className="flex items-center justify-center gap-2 sm:gap-3">
+          {/* Cafe Status Badge */}
+          {cafeStatus && (
+            isCafeClosed ? (
+              <div 
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-950/90 border border-red-500/80 text-red-200 shadow-lg shadow-red-950/80 animate-pulse select-none"
+                title={cafeStatus.closureReason || 'Cafe is currently closed.'}
+              >
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-red-300">
+                  Closed
+                </span>
+                {cafeStatus.reopenTime && (
+                  <span className="hidden md:inline text-[10px] font-bold text-red-400/90 ml-0.5">
+                    • Opens {cafeStatus.reopenTime}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div 
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 select-none"
+                title="Cafe is open & accepting orders"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">
+                  Open
+                </span>
+              </div>
+            )
+          )}
+
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}

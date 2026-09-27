@@ -10,11 +10,67 @@ import {
   setDoc, 
   deleteDoc, 
   getDoc,
+  getDocs,
   updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Dish } from '../types';
 import { DISHES as BASE_DISHES } from '../data';
+
+const DELETED_DISHES_KEY = 'barozza_deleted_dishes';
+const DISHES_CHANNEL_NAME = 'barozza_dishes_sync_channel';
+
+let dishesChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    dishesChannel = new BroadcastChannel(DISHES_CHANNEL_NAME);
+  }
+} catch {
+  dishesChannel = null;
+}
+
+/**
+ * Returns set of deleted dish IDs and normalized names to ensure deleted items never reappear
+ */
+export function getDeletedDishKeys(): { ids: Set<string>; names: Set<string> } {
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  if (typeof window === 'undefined') return { ids, names };
+  try {
+    const raw = localStorage.getItem(DELETED_DISHES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.ids)) {
+        parsed.ids.forEach((id: string) => ids.add(String(id)));
+      }
+      if (Array.isArray(parsed?.names)) {
+        parsed.names.forEach((name: string) => names.add(String(name).trim().toLowerCase()));
+      }
+    }
+  } catch {}
+  return { ids, names };
+}
+
+/**
+ * Marks a dish as permanently deleted in local cache and broadcasts across open tabs
+ */
+export function markDishAsDeletedLocally(dishId: string, dishName?: string) {
+  const { ids, names } = getDeletedDishKeys();
+  if (dishId) ids.add(dishId);
+  if (dishName) names.add(dishName.trim().toLowerCase());
+  try {
+    localStorage.setItem(DELETED_DISHES_KEY, JSON.stringify({
+      ids: Array.from(ids),
+      names: Array.from(names),
+    }));
+  } catch {}
+
+  if (dishesChannel) {
+    try {
+      dishesChannel.postMessage({ type: 'DISH_DELETED', dishId, dishName });
+    } catch {}
+  }
+}
 
 /**
  * Normalizes raw dish data from Firestore (supports both barozza_menu_catalog format and dishes collection format)
@@ -96,9 +152,53 @@ export function subscribeToDishes(onDishesUpdated: (dishes: Dish[]) => void) {
   let individualDishes: Dish[] = [];
 
   const emitMerged = () => {
-    const combined = mergeDishes(BASE_DISHES, catalogDishes, individualDishes);
-    onDishesUpdated(combined);
+    const { ids: delIds, names: delNames } = getDeletedDishKeys();
+
+    // Filter out deleted dishes from individualDishes and catalogDishes
+    const cleanIndividual = individualDishes.filter(
+      (d) => !delIds.has(d.id) && !delNames.has(d.name.trim().toLowerCase())
+    );
+    const cleanCatalog = catalogDishes.filter(
+      (d) => !delIds.has(d.id) && !delNames.has(d.name.trim().toLowerCase())
+    );
+
+    const hasCloudDishes = cleanIndividual.length > 0 || cleanCatalog.length > 0;
+    
+    // Crucial: Only fallback to BASE_DISHES if NO cloud dishes exist at all in Firestore.
+    // If dishes exist in Firestore, do NOT seed BASE_DISHES so deleted items stay permanently removed.
+    const base = hasCloudDishes 
+      ? [] 
+      : BASE_DISHES.filter(
+          (d) => !delIds.has(d.id) && !delNames.has(d.name.trim().toLowerCase())
+        );
+
+    const combined = mergeDishes(base, cleanCatalog, cleanIndividual);
+    const finalFiltered = combined.filter(
+      (d) => !delIds.has(d.id) && !delNames.has(d.name.trim().toLowerCase())
+    );
+    onDishesUpdated(finalFiltered);
   };
+
+  // Instant BroadcastChannel listener for multi-tab synchronization
+  const handleBroadcastMessage = (event: MessageEvent) => {
+    if (event.data?.type === 'DISH_DELETED') {
+      const { dishId, dishName } = event.data;
+      if (dishId) {
+        individualDishes = individualDishes.filter((d) => d.id !== dishId);
+        catalogDishes = catalogDishes.filter((d) => d.id !== dishId && (d as any).dishId !== dishId);
+      }
+      if (dishName) {
+        const lower = dishName.trim().toLowerCase();
+        individualDishes = individualDishes.filter((d) => d.name.trim().toLowerCase() !== lower);
+        catalogDishes = catalogDishes.filter((d) => d.name.trim().toLowerCase() !== lower);
+      }
+      emitMerged();
+    }
+  };
+
+  if (dishesChannel) {
+    dishesChannel.addEventListener('message', handleBroadcastMessage);
+  }
 
   // 1. Listen to barozza_menu_catalog in orders collection (used by external admin brozza-admin.vercel.app)
   const catalogDocRef = doc(db, 'orders', 'barozza_menu_catalog');
@@ -107,6 +207,22 @@ export function subscribeToDishes(onDishesUpdated: (dishes: Dish[]) => void) {
     (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
+        
+        // Sync any deleted IDs recorded in the catalog document
+        if (Array.isArray(data?.deletedDishIds)) {
+          const { ids, names } = getDeletedDishKeys();
+          data.deletedDishIds.forEach((id: string) => ids.add(String(id)));
+          if (Array.isArray(data?.deletedDishNames)) {
+            data.deletedDishNames.forEach((name: string) => names.add(String(name).trim().toLowerCase()));
+          }
+          try {
+            localStorage.setItem(DELETED_DISHES_KEY, JSON.stringify({
+              ids: Array.from(ids),
+              names: Array.from(names),
+            }));
+          } catch {}
+        }
+
         if (Array.isArray(data?.dishes)) {
           catalogDishes = data.dishes.map((d: any, idx: number) => normalizeDish(d, `cat-dish-${idx}`));
           emitMerged();
@@ -123,10 +239,8 @@ export function subscribeToDishes(onDishesUpdated: (dishes: Dish[]) => void) {
   const unsubDishes = onSnapshot(
     dishesColRef,
     (snapshot) => {
-      if (!snapshot.empty) {
-        individualDishes = snapshot.docs.map((docSnap) => normalizeDish({ id: docSnap.id, ...docSnap.data() }, docSnap.id));
-        emitMerged();
-      }
+      individualDishes = snapshot.docs.map((docSnap) => normalizeDish({ id: docSnap.id, ...docSnap.data() }, docSnap.id));
+      emitMerged();
     },
     (error) => {
       console.warn('Firestore dishes collection subscription warning:', error.message);
@@ -134,6 +248,9 @@ export function subscribeToDishes(onDishesUpdated: (dishes: Dish[]) => void) {
   );
 
   return () => {
+    if (dishesChannel) {
+      dishesChannel.removeEventListener('message', handleBroadcastMessage);
+    }
     unsubCatalog();
     unsubDishes();
   };
@@ -229,26 +346,58 @@ export async function updateDishStockInFirestore(dishId: string, newQuantity: nu
 }
 
 /**
- * Removes a dish from Firestore
+ * Removes a dish from Firestore and permanently ensures it disappears from both Admin and User dashboards
  */
-export async function deleteDishFromFirestore(dishId: string) {
+export async function deleteDishFromFirestore(dishId: string, dishName?: string) {
   try {
-    // 1. Delete from dishes collection
-    await deleteDoc(doc(db, 'dishes', dishId));
+    // 1. Mark as deleted locally and broadcast immediately across tabs (0ms latency)
+    markDishAsDeletedLocally(dishId, dishName);
 
-    // 2. Remove from barozza_menu_catalog in orders collection
+    // 2. Delete primary doc from dishes collection
+    await deleteDoc(doc(db, 'dishes', dishId)).catch(() => {});
+
+    // 3. Also check if any duplicate document in dishes collection has this name or id
+    try {
+      const dishesSnap = await getDocs(collection(db, 'dishes'));
+      for (const d of dishesSnap.docs) {
+        const data = d.data();
+        const matchesId = d.id === dishId || data.id === dishId || data.dishId === dishId;
+        const matchesName = dishName && data.name?.trim().toLowerCase() === dishName.trim().toLowerCase();
+        if (matchesId || matchesName) {
+          await deleteDoc(d.ref).catch(() => {});
+        }
+      }
+    } catch {}
+
+    // 4. Remove from barozza_menu_catalog in orders collection and persist deleted IDs/names
     const catalogRef = doc(db, 'orders', 'barozza_menu_catalog');
     const catalogSnap = await getDoc(catalogRef);
     if (catalogSnap.exists()) {
       const data = catalogSnap.data();
+      const existingDeletedIds: string[] = Array.isArray(data.deletedDishIds) ? data.deletedDishIds : [];
+      const existingDeletedNames: string[] = Array.isArray(data.deletedDishNames) ? data.deletedDishNames : [];
+
+      const nextDeletedIds = Array.from(new Set([...existingDeletedIds, dishId]));
+      const nextDeletedNames = dishName
+        ? Array.from(new Set([...existingDeletedNames, dishName.trim().toLowerCase()]))
+        : existingDeletedNames;
+
+      let filtered: any[] = [];
       if (Array.isArray(data.dishes)) {
-        const filtered = data.dishes.filter((d: any) => d.id !== dishId && d.dishId !== dishId);
-        await updateDoc(catalogRef, {
-          dishes: filtered,
-          totalDishes: filtered.length,
-          lastUpdated: new Date().toISOString(),
+        filtered = data.dishes.filter((d: any) => {
+          if (d.id === dishId || d.dishId === dishId) return false;
+          if (dishName && d.name?.trim().toLowerCase() === dishName.trim().toLowerCase()) return false;
+          return true;
         });
       }
+
+      await updateDoc(catalogRef, {
+        dishes: filtered,
+        totalDishes: filtered.length,
+        deletedDishIds: nextDeletedIds,
+        deletedDishNames: nextDeletedNames,
+        lastUpdated: new Date().toISOString(),
+      });
     }
   } catch (error) {
     console.error('Failed to delete dish from Firestore:', error);

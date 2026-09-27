@@ -22,7 +22,8 @@ import {
   Layers,
   AlertTriangle
 } from 'lucide-react';
-import { Dish } from '../../types';
+import { Dish, CafeStatus } from '../../types';
+import AdminCafeStatusControl from './AdminCafeStatusControl';
 
 interface AdminMenuTabProps {
   dishes: Dish[];
@@ -32,6 +33,8 @@ interface AdminMenuTabProps {
   onToggleDishAvailability: (dishId: string) => void;
   onResetDishes: () => void;
   onUpdateDishQuantity?: (dishId: string, quantity: number) => void;
+  cafeStatus?: CafeStatus;
+  onToggleCafeStatus?: (isOpen: boolean, closureReason?: string, reopenTime?: string) => Promise<void> | void;
 }
 
 const PRESET_IMAGES = [
@@ -59,6 +62,8 @@ export default function AdminMenuTab({
   onToggleDishAvailability,
   onResetDishes,
   onUpdateDishQuantity,
+  cafeStatus,
+  onToggleCafeStatus,
 }: AdminMenuTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -169,6 +174,36 @@ export default function AdminMenuTab({
 
   return (
     <div className="space-y-8">
+      {/* Live Menu Catalog Sync & Accessibility Summary Banner */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-neutral-900/90 border border-red-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-2xl bg-red-600/20 text-red-400 border border-red-500/30">
+            <Utensils className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-white text-base font-black tracking-tight">
+              Total Menu Catalog: {dishes.length} Dishes Active
+            </h3>
+            <p className="text-gray-400 text-xs font-medium">
+              100% synchronized in real-time with customer dashboard & external portal (brozza.vercel.app)
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {cafeStatus && onToggleCafeStatus && (
+            <AdminCafeStatusControl
+              cafeStatus={cafeStatus}
+              onToggleStatus={onToggleCafeStatus}
+              compact
+            />
+          )}
+          <span className="px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-2 shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            All {dishes.length} Dishes Accessible on Customer Dashboard
+          </span>
+        </div>
+      </div>
+
       {/* Action Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         {/* Search */}

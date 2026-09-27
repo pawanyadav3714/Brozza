@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useFirebase } from './FirebaseProvider';
-import { Order, OrderStatus, Dish, InventoryItem, AdminTab } from '../types';
+import { Order, OrderStatus, Dish, InventoryItem, AdminTab, CafeStatus } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronLeft, 
@@ -27,6 +27,7 @@ import AdminOrdersTab from './admin/AdminOrdersTab';
 import AdminMenuTab from './admin/AdminMenuTab';
 import AdminInventoryTab from './admin/AdminInventoryTab';
 import AdminGatewayTab from './admin/AdminGatewayTab';
+import AdminCafeStatusControl from './admin/AdminCafeStatusControl';
 import { isRecordExpired, RETENTION_PERIOD_MS } from '../lib/retentionPolicy';
 
 interface AdminDashboardProps {
@@ -44,6 +45,8 @@ interface AdminDashboardProps {
   onDeleteInventoryItem: (itemId: string) => void;
   onAdjustInventoryStock: (itemId: string, delta: number) => void;
   onResetInventory?: () => void;
+  cafeStatus?: CafeStatus;
+  onToggleCafeStatus?: (isOpen: boolean, closureReason?: string, reopenTime?: string) => Promise<void> | void;
 }
 
 const STUDIO_APP_URL = "https://brozza-admin.vercel.app/";
@@ -63,6 +66,8 @@ export default function AdminDashboard({
   onDeleteInventoryItem,
   onAdjustInventoryStock,
   onResetInventory,
+  cafeStatus,
+  onToggleCafeStatus,
 }: AdminDashboardProps) {
   const { user, signInWithGoogle, isSigningIn } = useFirebase();
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -172,7 +177,16 @@ export default function AdminDashboard({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
+            {/* Live Cafe Operational Switch (Instant 0ms toggle) */}
+            {cafeStatus && onToggleCafeStatus && (
+              <AdminCafeStatusControl
+                cafeStatus={cafeStatus}
+                onToggleStatus={onToggleCafeStatus}
+                compact
+              />
+            )}
+
             {/* Direct Link to External Admin App */}
             <a
               href={STUDIO_APP_URL}
@@ -306,6 +320,8 @@ export default function AdminDashboard({
                 dishes={dishes}
                 inventory={inventory}
                 onSelectTab={setActiveTab}
+                cafeStatus={cafeStatus}
+                onToggleCafeStatus={onToggleCafeStatus}
               />
             )}
 
@@ -328,6 +344,8 @@ export default function AdminDashboard({
                 onToggleDishAvailability={onToggleDishAvailability}
                 onResetDishes={onResetDishes}
                 onUpdateDishQuantity={onUpdateDishQuantity}
+                cafeStatus={cafeStatus}
+                onToggleCafeStatus={onToggleCafeStatus}
               />
             )}
 

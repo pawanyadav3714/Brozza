@@ -50,6 +50,17 @@ service cloud.firestore {
       allow delete: if isSignedIn() || true;
     }
 
+    // Cafe Operational Status & Settings: Instant cafe open/closed state
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /cafe_status/{statusId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     match /admins/{adminId} {
       allow read: if true;
       allow write: if false;

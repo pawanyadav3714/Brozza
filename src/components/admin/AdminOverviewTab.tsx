@@ -18,13 +18,16 @@ import {
   Package,
   Key
 } from 'lucide-react';
-import { Dish, Order, InventoryItem, AdminTab } from '../../types';
+import { Dish, Order, InventoryItem, AdminTab, CafeStatus } from '../../types';
+import AdminCafeStatusControl from './AdminCafeStatusControl';
 
 interface AdminOverviewTabProps {
   orders: Order[];
   dishes: Dish[];
   inventory: InventoryItem[];
   onSelectTab: (tab: AdminTab) => void;
+  cafeStatus?: CafeStatus;
+  onToggleCafeStatus?: (isOpen: boolean, closureReason?: string, reopenTime?: string) => Promise<void> | void;
 }
 
 export default function AdminOverviewTab({
@@ -32,6 +35,8 @@ export default function AdminOverviewTab({
   dishes,
   inventory,
   onSelectTab,
+  cafeStatus,
+  onToggleCafeStatus,
 }: AdminOverviewTabProps) {
   // Compute Key Metrics
   const totalRevenue = orders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
@@ -46,6 +51,14 @@ export default function AdminOverviewTab({
 
   return (
     <div className="space-y-8">
+      {/* Live Cafe Operational Status Controller */}
+      {cafeStatus && onToggleCafeStatus && (
+        <AdminCafeStatusControl
+          cafeStatus={cafeStatus}
+          onToggleStatus={onToggleCafeStatus}
+        />
+      )}
+
       {/* Top Banner Alert if low stock exists */}
       {lowStockItems.length > 0 && (
         <div className="p-4 rounded-3xl bg-amber-500/10 border border-amber-500/30 backdrop-blur-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

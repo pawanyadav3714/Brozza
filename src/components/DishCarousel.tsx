@@ -12,10 +12,17 @@ interface DishCarouselProps {
   dishes: Dish[];
   onSelectDish: (dish: Dish) => void;
   cartItems?: CartItem[];
-  onAddToCart?: (dish: Dish) => void;
+  onAddToCart?: (dish) => void;
+  isCafeOpen?: boolean;
 }
 
-export default function DishCarousel({ dishes, onSelectDish, cartItems = [], onAddToCart }: DishCarouselProps) {
+export default function DishCarousel({ 
+  dishes, 
+  onSelectDish, 
+  cartItems = [], 
+  onAddToCart,
+  isCafeOpen = true 
+}: DishCarouselProps) {
   const [isPaused, setIsPaused] = useState(false);
   
   // Duplicate dishes for seamless looping
@@ -58,7 +65,7 @@ export default function DishCarousel({ dishes, onSelectDish, cartItems = [], onA
                     src={dish.image}
                     alt={dish.name}
                     className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 ${
-                      dish.available === false ? 'grayscale-[60%]' : ''
+                      !isCafeOpen || dish.available === false ? 'grayscale-[60%]' : ''
                     }`}
                   />
                   <div className="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
@@ -66,7 +73,11 @@ export default function DishCarousel({ dishes, onSelectDish, cartItems = [], onA
                     <span className="px-4 py-1.5 bg-red-600/80 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
                       {dish.category}
                     </span>
-                    {dish.available === false || dish.quantityAvailable === 0 ? (
+                    {!isCafeOpen ? (
+                      <span className="px-3 py-1.5 bg-red-950/90 border border-red-500/60 text-red-300 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg animate-pulse">
+                        Cafe Closed
+                      </span>
+                    ) : dish.available === false || dish.quantityAvailable === 0 ? (
                       <span className="px-3 py-1.5 bg-neutral-900/90 border border-red-500/40 text-red-400 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
                         Sold Out
                       </span>
@@ -90,7 +101,7 @@ export default function DishCarousel({ dishes, onSelectDish, cartItems = [], onA
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="font-black text-2xl text-red-500">₹{dish.price.toFixed(2)}</span>
-                    {dish.available !== false && (dish.quantityAvailable === undefined || dish.quantityAvailable > 0) && (
+                    {isCafeOpen && dish.available !== false && (dish.quantityAvailable === undefined || dish.quantityAvailable > 0) && (
                       <button
                         type="button"
                         onClick={(e) => {

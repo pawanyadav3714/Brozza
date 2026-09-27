@@ -111,3 +111,16 @@ export interface InventoryItem {
   supplier: string;
   lastUpdated: string;
 }
+
+export interface CafeStatus {
+  isOpen: boolean;
+  status: 'open' | 'closed';
+  isCafeOpen: boolean;
+  closureReason?: string;
+  reopenTime?: string;
+  formattedReopenTime?: string;
+  closedAt?: string;
+  updatedAt?: string;
+  closedBy?: string;
+  storeName?: string;
+}
