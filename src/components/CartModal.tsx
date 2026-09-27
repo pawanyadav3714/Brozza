@@ -247,7 +247,7 @@ export default function CartModal({
                 }`}
               >
                 <Package className="w-4 h-4 shrink-0" />
-                <span>All Orders</span>
+                <span>My Orders</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                   activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-white/10 text-gray-300'
                 }`}>
@@ -284,14 +284,22 @@ export default function CartModal({
               {activeTab === 'orders' ? (
                 /* Orders List with Pipeline trackers */
                 <div className="space-y-6">
+                  {user && (
+                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/5 border border-white/10 mb-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-red-400" />
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">
+                        Personal History for <span className="text-white">{user.email || user.displayName}</span>
+                      </span>
+                    </div>
+                  )}
                   {orders.length === 0 ? (
                     <div className="text-center py-16 px-4 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
                       <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400">
                         <ShoppingBag className="w-8 h-8" />
                       </div>
-                      <h3 className="text-lg font-black text-white">No Orders Placed Yet</h3>
+                      <h3 className="text-lg font-black text-white">Your History is Clear</h3>
                       <p className="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed">
-                        Explore our handcrafted cafe menu and pick your favorite food or beverage to see live parcel fulfillment in action.
+                        You haven't placed any orders yet. Once you order, your personal fulfillment pipeline will appear here.
                       </p>
                       <button
                         type="button"

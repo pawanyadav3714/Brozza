@@ -24,7 +24,10 @@ import {
   ExternalLink,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
+  ArrowRight,
+  History,
+  ShieldCheck
 } from 'lucide-react';
 import { OrderStatus, Order, CafeStatus } from '../types';
 import { useFirebase } from './FirebaseProvider';
@@ -32,7 +35,7 @@ import { normalizePipelineStage } from './ParcelPipelineTracker';
 
 interface HeaderProps {
   cartCount: number;
-  onOpenCart: () => void;
+  onOpenCart: (initialTab?: 'cart' | 'orders' | 'drafts') => void;
   onOpenAdmin: () => void;
   onBackToMenu?: () => void;
   step: string;
@@ -237,46 +240,13 @@ export default function Header({
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Cart / Order Status Bag Button (Positioned cleanly before profile) */}
-          <button 
-            type="button"
-            onClick={onOpenCart}
-            className="relative w-11 h-11 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-red-500/40 flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-md group"
-            title="View Order Fulfillment Pipeline & Bag"
-            aria-label="View Orders and Bag"
-          >
-            <div className="relative flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-white stroke-[1.8] group-hover:text-red-400 transition-colors" />
-              
-              {/* Dynamic Status Dot on Bag Icon */}
-              {isPending && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,1)] border border-neutral-900" />
-              )}
-              {isAcceptedOrProgress && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,1)] border border-neutral-900" />
-              )}
-              {isDelivered && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,1)] border border-neutral-900" />
-              )}
-
-              {/* Badge count when no active stage or multiple items */}
-              {!activePipelineStage && totalBadgeCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white text-[10px] font-black flex items-center justify-center rounded-full shadow-lg border border-neutral-900">
-                  {totalBadgeCount}
-                </span>
-              )}
-            </div>
-          </button>
-
-          <div className="hidden sm:block h-6 w-px bg-white/10" />
-
-          {/* Top-Right Profile Icon & Glassmorphism Popover (Standard rightmost corner) */}
+          {/* Top-Right Profile Icon & Glassmorphism Popover */}
           <div className="relative" ref={profileRef}>
             {user ? (
               <button
                 type="button"
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="w-11 h-11 rounded-full bg-gradient-to-br from-red-600/30 to-amber-600/30 backdrop-blur-xl text-white font-black text-sm tracking-wider flex items-center justify-center shadow-lg border-2 border-white/20 hover:border-red-400 hover:scale-105 active:scale-95 transition-all cursor-pointer select-none"
+                className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-xl text-white font-black text-sm tracking-wider flex items-center justify-center shadow-lg border border-white/25 hover:bg-white/20 hover:border-white/45 hover:scale-105 active:scale-95 transition-all cursor-pointer select-none"
                 title={`${formattedName} (${user.email})`}
                 aria-label="User Profile"
               >
@@ -308,7 +278,7 @@ export default function Header({
 
                   <div className="relative z-10">
                     <div className="flex items-center gap-3.5 mb-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-600 to-amber-600 text-white font-black text-lg tracking-wider flex items-center justify-center shadow-lg shadow-red-900/30 shrink-0 border border-white/20">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-amber-600 text-white font-black text-lg tracking-wider flex items-center justify-center shadow-lg shadow-red-900/30 shrink-0 border border-white/20">
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -322,23 +292,31 @@ export default function Header({
                       </div>
                     </div>
 
-                    <div className="space-y-2 border-t border-white/10 pt-3">
+                    <div className="border-t border-white/10 pt-3 space-y-2">
+                      {/* Access to My Bag inside profile popover */}
                       <button
                         type="button"
                         onClick={() => {
                           setIsProfileOpen(false);
-                          onOpenCart();
+                          onOpenCart('cart');
                         }}
-                        className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs transition-all cursor-pointer group"
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-sm transition-all cursor-pointer group"
                       >
-                        <div className="flex items-center gap-2">
-                          <ShoppingBag className="w-4 h-4 text-red-400" />
-                          <span>My Bag & Orders</span>
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative">
+                            <ShoppingBag className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                            {cartCount > 0 && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+                            )}
+                          </div>
+                          <span>My Bag</span>
                         </div>
-                        {totalBadgeCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-red-600 text-[10px] font-black text-white">
-                            {totalBadgeCount}
+                        {cartCount > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full bg-white/15 text-white text-xs font-black">
+                            {cartCount}
                           </span>
+                        ) : (
+                          <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
                         )}
                       </button>
 
@@ -348,7 +326,7 @@ export default function Header({
                           setIsProfileOpen(false);
                           await signOutUser();
                         }}
-                        className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 hover:text-red-300 font-bold text-xs transition-all cursor-pointer group"
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 hover:text-red-300 font-bold text-sm transition-all cursor-pointer group"
                       >
                         <span>Log out</span>
                         <LogOut className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />

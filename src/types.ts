@@ -48,6 +48,8 @@ export type PipelineStage = 'Pending' | 'Received' | 'Processing' | 'Out For_del
 export interface Order {
   id: string;
   userId: string;
+  userEmail?: string;
+  userName?: string;
   dishId: string;
   dishName: string;
   dishImage?: string;

@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, setDoc, serverTimestamp, doc, onSnapshot, query, orderBy, limit, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, serverTimestamp, doc, onSnapshot, query, orderBy, limit, updateDoc, deleteDoc, where } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { subscribeToDishes, saveDishToFirestore, deleteDishFromFirestore, getDeletedDishKeys } from './lib/dishesSync';
 import { subscribeToCafeStatus, updateCafeStatus, getCachedCafeStatus } from './lib/cafeStatusSync';
@@ -142,16 +142,27 @@ export default function App() {
   // Real-time live orders list with persistence and 2-day retention policy
   const [orders, setOrders] = useState<Order[]>(() => {
     const validCachedOrders = purgeExpiredLocalStorageOrders();
-    if (validCachedOrders.length > 0) {
+    // Filter local cache by current user to prevent cross-user leakage before Firestore sync
+    const userFiltered = user?.uid 
+      ? validCachedOrders.filter(o => o.userId === user.uid)
+      : [];
+
+    if (userFiltered.length > 0) {
       const seen = new Set<string>();
-      return validCachedOrders.filter((o: any) => {
+      return userFiltered.filter((o: any) => {
         const key = o?.id || `${o?.parcelId || ''}-${o?.trackingNumber || ''}`;
         if (!key || seen.has(key)) return false;
         seen.add(key);
         return true;
       });
     }
-    return DEFAULT_DEMO_ORDERS.filter((o) => !isRecordExpired(o, RETENTION_PERIOD_MS));
+    
+    // Only show demo orders if no user is signed in OR if the demo user is somehow relevant
+    // In production-like environments, we usually don't want demo orders mixed in for real users
+    if (!user) {
+      return DEFAULT_DEMO_ORDERS.filter((o) => !isRecordExpired(o, RETENTION_PERIOD_MS));
+    }
+    return [];
   });
 
   // Menu Catalog State with persistence
@@ -332,7 +343,16 @@ export default function App() {
 
   // Real-time live orders tracking across the storefront (filtered by current user & 2-day retention)
   useEffect(() => {
-    const q = query(collection(db, 'orders'), limit(50));
+    if (!user?.uid) {
+      setOrders([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'orders'), 
+      where('userId', '==', user.uid),
+      limit(50)
+    );
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
